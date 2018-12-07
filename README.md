@@ -72,13 +72,28 @@ To set defaults:
 $ loco defaults -i <interval>
 ```
 
-# Collecting logs
+## Collecting logs
 
 ```bash
 $ loco collect /path/to/file.log
 ```
 
 The `-t` or `--tee` makes `loco` work as the `tee` command: output is send to both log file and stdout.
+
+# Autocompletion
+
+`loco` uses the excellent [kingpin](https://github.com/alecthomas/kingpin) library to parse command line and options. In order to have command completion you can add:
+
+```bash
+eval "$(loco --completion-script-bash)"
+```
+to your `.bashrc` file or
+
+```bash
+eval "$(loco --completion-script-zsh)"
+```
+
+to `.zshrc`.
 
 # TODO
 
