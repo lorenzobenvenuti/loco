@@ -50,10 +50,12 @@ func (lw *LogWriter) rotateLogFile() error {
 	if err != nil {
 		return utils.Wrap(err, "Error closing log writer")
 	}
-	rotated := fmt.Sprintf("%s.%d", lw.state.FullName, lw.state.Counter)
-	err = os.Rename(lw.state.FullName, rotated)
-	if err != nil {
-		return utils.Wrapf(err, "Error renaming log file to %s", rotated)
+	if utils.Exists(lw.state.FullName) {
+		rotated := fmt.Sprintf("%s.%d", lw.state.FullName, lw.state.Counter)
+		err = os.Rename(lw.state.FullName, rotated)
+		if err != nil {
+			return utils.Wrapf(err, "Error renaming log file to %s", rotated)
+		}
 	}
 	f, err := lw.openLogFile()
 	if err != nil {
