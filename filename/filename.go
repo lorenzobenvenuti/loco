@@ -6,11 +6,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lorenzobenvenuti/loco/logwriter"
+	"github.com/lorenzobenvenuti/loco/state"
 )
 
 type FileNameGenerator interface {
-	FileName(state *logwriter.State) string
+	FileName(state *state.State) string
 }
 
 func splitBaseNameAndExtension(file string) (string, string) {
@@ -24,7 +24,7 @@ func splitBaseNameAndExtension(file string) (string, string) {
 	return basename, ext
 }
 
-type patternTranslator func(s *logwriter.State) string
+type patternTranslator func(s *state.State) string
 
 type suffixFileNameGenerator struct {
 	patternTranslators map[string]patternTranslator
@@ -34,7 +34,7 @@ func (m *suffixFileNameGenerator) add(pattern string, t patternTranslator) {
 	m.patternTranslators[pattern] = t
 }
 
-func (m *suffixFileNameGenerator) suffixFromState(state *logwriter.State) string {
+func (m *suffixFileNameGenerator) suffixFromState(state *state.State) string {
 	tokens := strings.Split(state.Suffix, "%%")
 	for i, _ := range tokens {
 		for k, v := range m.patternTranslators {
@@ -44,7 +44,7 @@ func (m *suffixFileNameGenerator) suffixFromState(state *logwriter.State) string
 	return strings.Join(tokens, "%")
 }
 
-func (m *suffixFileNameGenerator) FileName(state *logwriter.State) string {
+func (m *suffixFileNameGenerator) FileName(state *state.State) string {
 	dir, file := path.Split(state.FullName)
 	basename, ext := splitBaseNameAndExtension(file)
 	suffix := m.suffixFromState(state)
@@ -53,12 +53,12 @@ func (m *suffixFileNameGenerator) FileName(state *logwriter.State) string {
 
 func NewFileNameGenerator() FileNameGenerator {
 	generator := &suffixFileNameGenerator{make(map[string]patternTranslator)}
-	generator.add("%c", func(s *logwriter.State) string { return strconv.Itoa(s.Counter) })
-	generator.add("%Y", func(s *logwriter.State) string { return strconv.Itoa(s.RotatedAt.Year()) })
-	generator.add("%m", func(s *logwriter.State) string { return fmt.Sprintf("%02d", int(s.RotatedAt.Month())) })
-	generator.add("%d", func(s *logwriter.State) string { return fmt.Sprintf("%02d", s.RotatedAt.Day()) })
-	generator.add("%H", func(s *logwriter.State) string { return fmt.Sprintf("%02d", s.RotatedAt.Hour()) })
-	generator.add("%M", func(s *logwriter.State) string { return fmt.Sprintf("%02d", s.RotatedAt.Minute()) })
-	generator.add("%S", func(s *logwriter.State) string { return fmt.Sprintf("%02d", s.RotatedAt.Second()) })
+	generator.add("%c", func(s *state.State) string { return strconv.Itoa(s.Counter) })
+	generator.add("%Y", func(s *state.State) string { return strconv.Itoa(s.RotatedAt.Year()) })
+	generator.add("%m", func(s *state.State) string { return fmt.Sprintf("%02d", int(s.RotatedAt.Month())) })
+	generator.add("%d", func(s *state.State) string { return fmt.Sprintf("%02d", s.RotatedAt.Day()) })
+	generator.add("%H", func(s *state.State) string { return fmt.Sprintf("%02d", s.RotatedAt.Hour()) })
+	generator.add("%M", func(s *state.State) string { return fmt.Sprintf("%02d", s.RotatedAt.Minute()) })
+	generator.add("%S", func(s *state.State) string { return fmt.Sprintf("%02d", s.RotatedAt.Second()) })
 	return generator
 }

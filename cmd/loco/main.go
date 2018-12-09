@@ -12,6 +12,7 @@ import (
 	"github.com/lorenzobenvenuti/loco/defaults"
 	"github.com/lorenzobenvenuti/loco/intervals"
 	"github.com/lorenzobenvenuti/loco/logwriter"
+	"github.com/lorenzobenvenuti/loco/state"
 )
 
 var logger = log.New(os.Stderr, "", 0)
@@ -25,7 +26,8 @@ func createConfig(file string, intervalExpr string) {
 	if err != nil {
 		logger.Fatalf("Cannot parse interval %s: %s", intervalExpr, err)
 	}
-	err = logwriter.NewConfig(absPath, time.Duration(interval))
+	storage := state.MustCreateHomeDirStateStorage()
+	_, err = state.NewConfig(storage, absPath, time.Duration(interval))
 	if err != nil {
 		logger.Fatalf("Cannot store configuration: %s", err)
 	}
@@ -59,18 +61,18 @@ func collectLogs(file string, tee bool) {
 }
 
 func listLogFiles() {
-	l, err := logwriter.List()
+	l, err := state.List()
 	if err != nil {
 		logger.Fatal(err)
 	}
-	err = logwriter.WriteStates(os.Stdout, l)
+	err = state.WriteStates(os.Stdout, l)
 	if err != nil {
 		logger.Fatal(err)
 	}
 }
 
 func removeLogFile(name string) {
-	err := logwriter.Remove(name)
+	err := state.Remove(name)
 	if err != nil {
 		logger.Fatalf("Cannot remove file %s: %s", name, err)
 	}

@@ -4,13 +4,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lorenzobenvenuti/loco/logwriter"
+	"github.com/lorenzobenvenuti/loco/state"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestSuffixWithExtension(t *testing.T) {
 	sut := NewFileNameGenerator()
-	state := &logwriter.State{
+	state := &state.State{
 		FullName: "/path/to/file.log",
 		Counter:  1,
 		Suffix:   "foo",
@@ -20,7 +20,7 @@ func TestSuffixWithExtension(t *testing.T) {
 
 func TestSuffixWithoutExtension(t *testing.T) {
 	sut := NewFileNameGenerator()
-	state := &logwriter.State{
+	state := &state.State{
 		FullName: "/path/to/file",
 		Counter:  1,
 		Suffix:   "bar",
@@ -29,7 +29,7 @@ func TestSuffixWithoutExtension(t *testing.T) {
 }
 
 func TestSuffixWithCounter(t *testing.T) {
-	state := &logwriter.State{
+	state := &state.State{
 		FullName: "/path/to/file.log",
 		Counter:  1,
 		Suffix:   "X%cY",
@@ -39,7 +39,7 @@ func TestSuffixWithCounter(t *testing.T) {
 }
 
 func TestSuffixWithTrailingCounter(t *testing.T) {
-	state := &logwriter.State{
+	state := &state.State{
 		FullName: "/path/to/file.log",
 		Counter:  1,
 		Suffix:   "%cX",
@@ -49,7 +49,7 @@ func TestSuffixWithTrailingCounter(t *testing.T) {
 }
 
 func TestEscapedPercent(t *testing.T) {
-	state := &logwriter.State{
+	state := &state.State{
 		FullName: "/path/to/file.log",
 		Counter:  1,
 		Suffix:   "c%%%cc",
@@ -59,7 +59,7 @@ func TestEscapedPercent(t *testing.T) {
 }
 
 func TestTwoEscapedPercent(t *testing.T) {
-	state := &logwriter.State{
+	state := &state.State{
 		FullName: "/path/to/file.log",
 		Counter:  1,
 		Suffix:   "c%%%%%cc",
@@ -70,7 +70,7 @@ func TestTwoEscapedPercent(t *testing.T) {
 
 func TestSuffixWithDate(t *testing.T) {
 	now, _ := time.Parse("2006-01-02", "2018-12-09")
-	state := &logwriter.State{
+	state := &state.State{
 		FullName:  "/path/to/file.log",
 		Counter:   1,
 		Suffix:    "X%Y%m%dY",
@@ -82,7 +82,7 @@ func TestSuffixWithDate(t *testing.T) {
 
 func TestSuffixWithDateAndTime(t *testing.T) {
 	now, _ := time.Parse("2006-01-02 15:04:05", "2018-12-09 15:21:32")
-	state := &logwriter.State{
+	state := &state.State{
 		FullName:  "/path/to/file.log",
 		Counter:   1,
 		Suffix:    "X%Y%m%d%H%M%SY",

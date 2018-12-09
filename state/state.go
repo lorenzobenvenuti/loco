@@ -1,4 +1,4 @@
-package logwriter
+package state
 
 import (
 	"encoding/json"
@@ -70,10 +70,11 @@ func (m *jsonStateMarshaler) unmarshal(value []byte) (*State, error) {
 	return s, nil
 }
 
-type stateStorage interface {
-	store(state *State) error
-	load(fullName string) (*State, error)
-	list() ([]*State, error)
+type StateStorage interface {
+	Store(state *State) error
+	Load(fullName string) (*State, error)
+	List() ([]*State, error)
+	Remove(fullName string) error
 }
 
 type fileStateStorage struct {
@@ -85,7 +86,7 @@ func (s *fileStateStorage) filename(fullName string) string {
 	return fmt.Sprintf("%s.json", utils.MD5(fullName))
 }
 
-func (s *fileStateStorage) store(state *State) error {
+func (s *fileStateStorage) Store(state *State) error {
 	utils.CreateDirIfNotExists(s.dir)
 	b, err := s.marshaler.marshal(state)
 	if err != nil {
@@ -102,17 +103,17 @@ func (s *fileStateStorage) loadFromFile(filename string) (*State, error) {
 	return s.marshaler.unmarshal(b)
 }
 
-func (s *fileStateStorage) load(fullName string) (*State, error) {
+func (s *fileStateStorage) Load(fullName string) (*State, error) {
 	filename := path.Join(s.dir, s.filename(fullName))
 	return s.loadFromFile(filename)
 }
 
-func (s *fileStateStorage) remove(fullName string) error {
+func (s *fileStateStorage) Remove(fullName string) error {
 	filename := path.Join(s.dir, s.filename(fullName))
 	return os.Remove(filename)
 }
 
-func (s *fileStateStorage) list() ([]*State, error) {
+func (s *fileStateStorage) List() ([]*State, error) {
 	files, err := ioutil.ReadDir(s.dir)
 	if err != nil {
 		return nil, err
@@ -129,12 +130,20 @@ func (s *fileStateStorage) list() ([]*State, error) {
 	return states, nil
 }
 
-func newHomeDirStateStorage() (*fileStateStorage, error) {
+func NewHomeDirStateStorage() (StateStorage, error) {
 	appDir, err := utils.AppDir()
 	if err != nil {
 		return nil, err
 	}
 	return newFileStateStorage(path.Join(appDir, "logfiles"))
+}
+
+func MustCreateHomeDirStateStorage() StateStorage {
+	s, err := NewHomeDirStateStorage()
+	if err != nil {
+		panic(err)
+	}
+	return s
 }
 
 func newFileStateStorage(dir string) (*fileStateStorage, error) {
@@ -145,19 +154,47 @@ func newFileStateStorage(dir string) (*fileStateStorage, error) {
 }
 
 func List() ([]*State, error) {
-	storage, err := newHomeDirStateStorage()
+	storage, err := NewHomeDirStateStorage()
 	if err != nil {
 		return nil, err
 	}
-	return storage.list()
+	return storage.List()
 }
 
 func Remove(name string) error {
-	storage, err := newHomeDirStateStorage()
+	storage, err := NewHomeDirStateStorage()
 	if err != nil {
 		return err
 	}
-	return storage.remove(name)
+	return storage.Remove(name)
+}
+
+type mapStorage struct {
+	states map[string]*State
+}
+
+func (s *mapStorage) Store(state *State) error {
+	s.states[state.FullName] = state
+	return nil
+}
+
+func (s *mapStorage) Load(fullName string) (*State, error) {
+	return s.states[fullName], nil
+}
+
+func (s *mapStorage) List() ([]*State, error) {
+	return nil, nil
+}
+
+func (s *mapStorage) Remove(fullName string) error {
+	delete(s.states, fullName)
+	return nil
+}
+
+func NewMapStorage() StateStorage {
+	return &mapStorage{
+		states: make(map[string]*State),
+	}
 }
 
 func WriteStates(w io.Writer, states []*State) error {
@@ -169,4 +206,12 @@ func WriteStates(w io.Writer, states []*State) error {
 	t.Execute(tw, states)
 	tw.Flush()
 	return nil
+}
+
+func NewConfig(storage StateStorage, fullName string, interval time.Duration) (*State, error) {
+	s := &State{
+		FullName: fullName,
+		Interval: interval,
+	}
+	return s, storage.Store(s)
 }

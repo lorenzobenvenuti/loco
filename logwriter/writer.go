@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/lorenzobenvenuti/loco/state"
 	"github.com/lorenzobenvenuti/loco/utils"
 )
 
@@ -22,9 +23,9 @@ func (t *timeNowProvider) Now() time.Time {
 var defaultNowProvider = &timeNowProvider{}
 
 type LogWriter struct {
-	state        *State
+	state        *state.State
 	file         *os.File
-	stateStorage stateStorage
+	stateStorage state.StateStorage
 	nowProvider  nowProvider
 }
 
@@ -39,7 +40,7 @@ func (lw *LogWriter) createLogFile() error {
 	}
 	lw.state.CreatedAt = lw.nowProvider.Now()
 	lw.state.RotatedAt = lw.nowProvider.Now()
-	lw.stateStorage.store(lw.state)
+	lw.stateStorage.Store(lw.state)
 	lw.file = f
 	return nil
 }
@@ -60,7 +61,7 @@ func (lw *LogWriter) rotateLogFile() error {
 	}
 	lw.state.RotatedAt = lw.nowProvider.Now()
 	lw.state.Counter++
-	lw.stateStorage.store(lw.state)
+	lw.stateStorage.Store(lw.state)
 	lw.file = f
 	return nil
 }
@@ -91,15 +92,15 @@ func (lw *LogWriter) Close() error {
 }
 
 func LoadWriter(fullName string) (io.WriteCloser, error) {
-	storage, err := newHomeDirStateStorage()
+	storage, err := state.NewHomeDirStateStorage()
 	if err != nil {
 		return nil, err
 	}
 	return loadWriter(storage, defaultNowProvider, fullName)
 }
 
-func loadWriter(storage stateStorage, nowProvider nowProvider, fullName string) (*LogWriter, error) {
-	s, err := storage.load(fullName)
+func loadWriter(storage state.StateStorage, nowProvider nowProvider, fullName string) (*LogWriter, error) {
+	s, err := storage.Load(fullName)
 	if err != nil {
 		return nil, err
 	}
@@ -110,33 +111,16 @@ func loadWriter(storage stateStorage, nowProvider nowProvider, fullName string) 
 	}, nil
 }
 
-func NewConfig(fullName string, interval time.Duration) error {
-	storage, err := newHomeDirStateStorage()
-	if err != nil {
-		return err
-	}
-	_, err = newConfig(storage, fullName, interval)
-	return err
-}
-
-func newConfig(storage stateStorage, fullName string, interval time.Duration) (*State, error) {
-	s := &State{
-		FullName: fullName,
-		Interval: interval,
-	}
-	return s, storage.store(s)
-}
-
 func NewWriter(fullName string, interval time.Duration) (io.WriteCloser, error) {
-	storage, err := newHomeDirStateStorage()
+	storage, err := state.NewHomeDirStateStorage()
 	if err != nil {
 		return nil, err
 	}
 	return newWriter(storage, defaultNowProvider, fullName, interval)
 }
 
-func newWriter(storage stateStorage, nowProvider nowProvider, fullName string, interval time.Duration) (*LogWriter, error) {
-	s, err := newConfig(storage, fullName, interval)
+func newWriter(storage state.StateStorage, nowProvider nowProvider, fullName string, interval time.Duration) (*LogWriter, error) {
+	s, err := state.NewConfig(storage, fullName, interval)
 	if err != nil {
 		return nil, err
 	}

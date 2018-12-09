@@ -7,32 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lorenzobenvenuti/loco/state"
 	"github.com/lorenzobenvenuti/loco/utils"
 	"github.com/stretchr/testify/assert"
 )
-
-type fakeStorage struct {
-	states map[string]*State
-}
-
-func (s *fakeStorage) store(state *State) error {
-	s.states[state.FullName] = state
-	return nil
-}
-
-func (s *fakeStorage) load(fullName string) (*State, error) {
-	return s.states[fullName], nil
-}
-
-func (s *fakeStorage) list() ([]*State, error) {
-	return nil, nil
-}
-
-func newFakeStorage() *fakeStorage {
-	return &fakeStorage{
-		states: make(map[string]*State),
-	}
-}
 
 type fakeNowProvider struct {
 	now time.Time
@@ -47,17 +25,17 @@ func newFakeNowProvider(nanos int64) *fakeNowProvider {
 }
 
 func TestLoadWriter(t *testing.T) {
-	s := &State{
+	s := &state.State{
 		FullName:  "/path/to/file",
 		Interval:  time.Duration(100),
 		CreatedAt: time.Unix(0, 12),
 		RotatedAt: time.Unix(0, 34),
 	}
-	storage := newFakeStorage()
-	storage.store(s)
+	storage := state.NewMapStorage()
+	storage.Store(s)
 	lw, err := loadWriter(storage, newFakeNowProvider(42), "/path/to/file")
 	assert.Nil(t, err, "Loading the writer should not return an error")
-	expected := &State{
+	expected := &state.State{
 		FullName:  "/path/to/file",
 		Interval:  time.Duration(100),
 		CreatedAt: time.Unix(0, 12),
@@ -67,44 +45,29 @@ func TestLoadWriter(t *testing.T) {
 }
 
 func TestNewWriter(t *testing.T) {
-	storage := newFakeStorage()
+	storage := state.NewMapStorage()
 	lw, err := newWriter(storage, newFakeNowProvider(42), "/path/to/file", time.Duration(123))
 	assert.Nil(t, err, "Creating the writer should not return an error")
-	s, err := storage.load("/path/to/file")
+	s, err := storage.Load("/path/to/file")
 	assert.Nil(t, err, "Retrieving the writer from storage should not return an error")
 	assert.Equal(t, s, lw.state)
 	assert.Nil(t, err, "Error should be nil")
-	expected := &State{
+	expected := &state.State{
 		FullName: "/path/to/file",
 		Interval: time.Duration(123),
 	}
 	assert.Equal(t, expected, lw.state)
 }
 
-func TestNewConfig(t *testing.T) {
-	storage := newFakeStorage()
-	s, err := newConfig(storage, "/path/to/file", time.Duration(123))
-	assert.NoError(t, err, "Creating the config should not return an error")
-	loaded, err := storage.load("/path/to/file")
-	assert.NoError(t, err, "Retrieving the writer from storage should not return an error")
-	assert.Equal(t, s, loaded)
-	assert.Nil(t, err, "Error should be nil")
-	expected := &State{
-		FullName: "/path/to/file",
-		Interval: time.Duration(123),
-	}
-	assert.Equal(t, expected, s)
-}
-
 func TestLogWriterFirstWrite(t *testing.T) {
 	dir := utils.MustCreateTempDir()
 	defer os.RemoveAll(dir)
 	fullpath := path.Join(dir, "file.log")
-	s := &State{
+	s := &state.State{
 		FullName: fullpath,
 		Interval: time.Duration(100),
 	}
-	storage := newFakeStorage()
+	storage := state.NewMapStorage()
 	lw := &LogWriter{
 		state:        s,
 		nowProvider:  newFakeNowProvider(42),
@@ -115,9 +78,9 @@ func TestLogWriterFirstWrite(t *testing.T) {
 	bytes, err := ioutil.ReadFile(fullpath)
 	assert.NoError(t, err)
 	assert.Equal(t, []byte("foo"), bytes)
-	updated, err := storage.load(fullpath)
+	updated, err := storage.Load(fullpath)
 	assert.NoError(t, err)
-	expected := &State{
+	expected := &state.State{
 		FullName:  fullpath,
 		Interval:  time.Duration(100),
 		CreatedAt: time.Unix(0, 42),
@@ -133,14 +96,14 @@ func TestLogWriterFileExists(t *testing.T) {
 	defer os.RemoveAll(dir)
 	fullpath := path.Join(dir, "file.log")
 	ioutil.WriteFile(fullpath, []byte("bar"), 0755)
-	storage := newFakeStorage()
-	s := &State{
+	storage := state.NewMapStorage()
+	s := &state.State{
 		FullName:  fullpath,
 		Interval:  time.Duration(100),
 		CreatedAt: time.Unix(0, 12),
 		RotatedAt: time.Unix(0, 12),
 	}
-	storage.store(s)
+	storage.Store(s)
 	lw := &LogWriter{
 		state:        s,
 		nowProvider:  newFakeNowProvider(42),
@@ -151,9 +114,9 @@ func TestLogWriterFileExists(t *testing.T) {
 	bytes, err := ioutil.ReadFile(fullpath)
 	assert.NoError(t, err)
 	assert.Equal(t, []byte("barfoo"), bytes)
-	updated, err := storage.load(fullpath)
+	updated, err := storage.Load(fullpath)
 	assert.NoError(t, err)
-	expected := &State{
+	expected := &state.State{
 		FullName:  fullpath,
 		Interval:  time.Duration(100),
 		CreatedAt: time.Unix(0, 12),
@@ -173,14 +136,14 @@ func TestLogWriterFileRotation(t *testing.T) {
 	assert.NoError(t, err)
 	err = ioutil.WriteFile(rotatedPath, []byte("This should be overwritten"), 0755)
 	assert.NoError(t, err)
-	storage := newFakeStorage()
-	s := &State{
+	storage := state.NewMapStorage()
+	s := &state.State{
 		FullName:  fullpath,
 		Interval:  time.Duration(10),
 		CreatedAt: time.Unix(0, 12),
 		RotatedAt: time.Unix(0, 12),
 	}
-	storage.store(s)
+	storage.Store(s)
 	lw := &LogWriter{
 		state:        s,
 		nowProvider:  newFakeNowProvider(42),
@@ -194,9 +157,9 @@ func TestLogWriterFileRotation(t *testing.T) {
 	bytes, err = ioutil.ReadFile(rotatedPath)
 	assert.NoError(t, err)
 	assert.Equal(t, []byte("bar"), bytes)
-	updated, err := storage.load(fullpath)
+	updated, err := storage.Load(fullpath)
 	assert.NoError(t, err)
-	expected := &State{
+	expected := &state.State{
 		FullName:  fullpath,
 		Interval:  time.Duration(10),
 		CreatedAt: time.Unix(0, 12),

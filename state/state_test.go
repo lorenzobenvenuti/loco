@@ -1,4 +1,4 @@
-package logwriter
+package state
 
 import (
 	"bytes"
@@ -38,7 +38,7 @@ func TestStoreReturnsAnErrorWhenStateIsNotFound(t *testing.T) {
 	dir := utils.MustCreateTempDir()
 	defer os.RemoveAll(dir)
 	s := mustCreateStorage(dir)
-	_, err := s.load("/path/to/file")
+	_, err := s.Load("/path/to/file")
 	assert.NotNil(t, err, "Should raise an error if session is not found")
 }
 
@@ -53,8 +53,8 @@ func TestStoreSuccessfullyStoresAState(t *testing.T) {
 		Interval:  time.Duration(100),
 		Counter:   42,
 	}
-	s.store(expected)
-	actual, err := s.load("/path/to/file")
+	s.Store(expected)
+	actual, err := s.Load("/path/to/file")
 	assert.Nil(t, err, "No error is returned when state is found")
 	assert.Equal(t, expected, actual, "Loaded state is equal to the stored")
 }
@@ -77,9 +77,9 @@ func TestStoreSuccessfullyListStates(t *testing.T) {
 		Interval:  time.Duration(200),
 		Counter:   77,
 	}
-	s.store(s1)
-	s.store(s2)
-	states, err := s.list()
+	s.Store(s1)
+	s.Store(s2)
+	states, err := s.List()
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(states))
 }
@@ -95,13 +95,13 @@ func TestStoreSuccessfullyRemoveStates(t *testing.T) {
 		Interval:  time.Duration(100),
 		Counter:   42,
 	}
-	s.store(s1)
-	states, err := s.list()
+	s.Store(s1)
+	states, err := s.List()
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(states))
-	err = s.remove("/path/to/file")
+	err = s.Remove("/path/to/file")
 	assert.NoError(t, err)
-	states, err = s.list()
+	states, err = s.List()
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(states))
 }
@@ -169,4 +169,19 @@ func TestWriteStates(t *testing.T) {
 	err := WriteStates(&buf, []*State{s1, s2})
 	assert.NoError(t, err)
 	assert.Equal(t, "FILE           CREATED AT          ROTATED AT\n/path/to/file1 -                   -\n/path/to/file2 18 Nov 18 17:15 UTC 18 Nov 18 18:15 UTC\n\n", buf.String())
+}
+
+func TestNewConfig(t *testing.T) {
+	storage := NewMapStorage()
+	s, err := NewConfig(storage, "/path/to/file", time.Duration(123))
+	assert.NoError(t, err, "Creating the config should not return an error")
+	loaded, err := storage.Load("/path/to/file")
+	assert.NoError(t, err, "Retrieving the writer from storage should not return an error")
+	assert.Equal(t, s, loaded)
+	assert.Nil(t, err, "Error should be nil")
+	expected := &State{
+		FullName: "/path/to/file",
+		Interval: time.Duration(123),
+	}
+	assert.Equal(t, expected, s)
 }
