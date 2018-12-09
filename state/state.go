@@ -11,16 +11,21 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/lorenzobenvenuti/loco/intervals"
 	"github.com/lorenzobenvenuti/loco/utils"
 )
+
+type Config struct {
+	Interval string
+	Suffix   string
+}
 
 type State struct {
 	FullName  string
 	CreatedAt time.Time
 	RotatedAt time.Time
-	Interval  time.Duration
 	Counter   int
-	Suffix    string
+	Config    Config
 }
 
 func (s *State) formatDate(t time.Time) string {
@@ -43,7 +48,8 @@ func (s *State) FileMustBeCreated() bool {
 }
 
 func (s *State) FileMustBeRotated(now time.Time) bool {
-	return s.RotatedAt.IsZero() || (now.Sub(s.RotatedAt) > s.Interval)
+	interval := intervals.MustParse(s.Config.Interval)
+	return s.RotatedAt.IsZero() || (now.Sub(s.RotatedAt) > interval)
 }
 
 type stateMarshaller interface {
@@ -208,11 +214,17 @@ func WriteStates(w io.Writer, states []*State) error {
 	return nil
 }
 
-func NewConfig(storage StateStorage, fullName string, interval time.Duration, suffix string) (*State, error) {
+func NewState(storage StateStorage, fullName string, config Config) (*State, error) {
 	s := &State{
 		FullName: fullName,
+		Config:   config,
+	}
+	return s, storage.Store(s)
+}
+
+func NewConfig(interval string, suffix string) *Config {
+	return &Config{
 		Interval: interval,
 		Suffix:   suffix,
 	}
-	return s, storage.Store(s)
 }

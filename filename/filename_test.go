@@ -13,7 +13,7 @@ func TestSuffixWithExtension(t *testing.T) {
 	state := &state.State{
 		FullName: "/path/to/file.log",
 		Counter:  1,
-		Suffix:   "foo",
+		Config:   state.Config{Suffix: "foo"},
 	}
 	assert.Equal(t, "/path/to/file.foo.log", sut.FileName(state))
 }
@@ -23,7 +23,7 @@ func TestSuffixWithoutExtension(t *testing.T) {
 	state := &state.State{
 		FullName: "/path/to/file",
 		Counter:  1,
-		Suffix:   "bar",
+		Config:   state.Config{Suffix: "bar"},
 	}
 	assert.Equal(t, "/path/to/file.bar", sut.FileName(state))
 }
@@ -32,7 +32,7 @@ func TestSuffixWithCounter(t *testing.T) {
 	state := &state.State{
 		FullName: "/path/to/file.log",
 		Counter:  1,
-		Suffix:   "X%cY",
+		Config:   state.Config{Suffix: "X%cY"},
 	}
 	sut := NewFileNameGenerator()
 	assert.Equal(t, "/path/to/file.X1Y.log", sut.FileName(state))
@@ -42,7 +42,7 @@ func TestSuffixWithTrailingCounter(t *testing.T) {
 	state := &state.State{
 		FullName: "/path/to/file.log",
 		Counter:  1,
-		Suffix:   "%cX",
+		Config:   state.Config{Suffix: "%cX"},
 	}
 	sut := NewFileNameGenerator()
 	assert.Equal(t, "/path/to/file.1X.log", sut.FileName(state))
@@ -52,7 +52,7 @@ func TestEscapedPercent(t *testing.T) {
 	state := &state.State{
 		FullName: "/path/to/file.log",
 		Counter:  1,
-		Suffix:   "c%%%cc",
+		Config:   state.Config{Suffix: "c%%%cc"},
 	}
 	sut := NewFileNameGenerator()
 	assert.Equal(t, "/path/to/file.c%1c.log", sut.FileName(state))
@@ -62,7 +62,7 @@ func TestTwoEscapedPercent(t *testing.T) {
 	state := &state.State{
 		FullName: "/path/to/file.log",
 		Counter:  1,
-		Suffix:   "c%%%%%cc",
+		Config:   state.Config{Suffix: "c%%%%%cc"},
 	}
 	sut := NewFileNameGenerator()
 	assert.Equal(t, "/path/to/file.c%%1c.log", sut.FileName(state))
@@ -73,7 +73,7 @@ func TestSuffixWithDate(t *testing.T) {
 	state := &state.State{
 		FullName:  "/path/to/file.log",
 		Counter:   1,
-		Suffix:    "X%Y%m%dY",
+		Config:    state.Config{Suffix: "X%Y%m%dY"},
 		RotatedAt: now,
 	}
 	sut := NewFileNameGenerator()
@@ -85,7 +85,7 @@ func TestSuffixWithDateAndTime(t *testing.T) {
 	state := &state.State{
 		FullName:  "/path/to/file.log",
 		Counter:   1,
-		Suffix:    "X%Y%m%d%H%M%SY",
+		Config:    state.Config{Suffix: "X%Y%m%d%H%M%SY"},
 		RotatedAt: now,
 	}
 	sut := NewFileNameGenerator()

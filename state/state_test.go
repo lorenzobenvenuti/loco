@@ -15,8 +15,11 @@ func TestJsonStateMarshaler(t *testing.T) {
 		FullName:  "/path/to/file.log",
 		CreatedAt: time.Unix(0, 1000000),
 		RotatedAt: time.Unix(0, 2000000),
-		Interval:  time.Duration(1000),
 		Counter:   42,
+		Config: Config{
+			Interval: "2d",
+			Suffix:   "%c",
+		},
 	}
 	m := &jsonStateMarshaler{}
 	v, err := m.marshal(s)
@@ -50,8 +53,11 @@ func TestStoreSuccessfullyStoresAState(t *testing.T) {
 		FullName:  "/path/to/file",
 		CreatedAt: time.Unix(0, 10000),
 		RotatedAt: time.Unix(0, 20000),
-		Interval:  time.Duration(100),
 		Counter:   42,
+		Config: Config{
+			Interval: "3w",
+			Suffix:   "%Y%m%d",
+		},
 	}
 	s.Store(expected)
 	actual, err := s.Load("/path/to/file")
@@ -67,15 +73,21 @@ func TestStoreSuccessfullyListStates(t *testing.T) {
 		FullName:  "/path/to/file",
 		CreatedAt: time.Unix(0, 10000),
 		RotatedAt: time.Unix(0, 20000),
-		Interval:  time.Duration(100),
 		Counter:   42,
+		Config: Config{
+			Interval: "2d",
+			Suffix:   "%c",
+		},
 	}
 	s2 := &State{
 		FullName:  "/path/to/another/file",
 		CreatedAt: time.Unix(0, 30000),
 		RotatedAt: time.Unix(0, 40000),
-		Interval:  time.Duration(200),
 		Counter:   77,
+		Config: Config{
+			Interval: "2d",
+			Suffix:   "%c",
+		},
 	}
 	s.Store(s1)
 	s.Store(s2)
@@ -92,8 +104,11 @@ func TestStoreSuccessfullyRemoveStates(t *testing.T) {
 		FullName:  "/path/to/file",
 		CreatedAt: time.Unix(0, 10000),
 		RotatedAt: time.Unix(0, 20000),
-		Interval:  time.Duration(100),
 		Counter:   42,
+		Config: Config{
+			Interval: "2d",
+			Suffix:   "%c",
+		},
 	}
 	s.Store(s1)
 	states, err := s.List()
@@ -118,18 +133,22 @@ func TestFileMustNotBeCreated(t *testing.T) {
 
 func TestFileMustBeRotated(t *testing.T) {
 	s := &State{
-		RotatedAt: time.Unix(0, 30),
-		Interval:  time.Duration(10),
+		RotatedAt: time.Unix(0, int64(time.Hour)),
+		Config: Config{
+			Interval: "2d",
+		},
 	}
-	assert.True(t, s.FileMustBeRotated(time.Unix(0, 42)))
+	assert.True(t, s.FileMustBeRotated(time.Unix(0, int64(time.Hour*50))))
 }
 
 func TestFileMustNotBeRotated(t *testing.T) {
 	s := &State{
-		RotatedAt: time.Unix(0, 40),
-		Interval:  time.Duration(10),
+		RotatedAt: time.Unix(0, int64(time.Hour)),
+		Config: Config{
+			Interval: "1d",
+		},
 	}
-	assert.False(t, s.FileMustBeRotated(time.Unix(0, 42)))
+	assert.False(t, s.FileMustBeRotated(time.Unix(0, int64(time.Hour*22))))
 }
 
 func TestPrettyCreatedAt(t *testing.T) {
@@ -173,7 +192,8 @@ func TestWriteStates(t *testing.T) {
 
 func TestNewConfig(t *testing.T) {
 	storage := NewMapStorage()
-	s, err := NewConfig(storage, "/path/to/file", time.Duration(123), "%c")
+	c := NewConfig("1d", "%c")
+	s, err := NewState(storage, "/path/to/file", *c)
 	assert.NoError(t, err, "Creating the config should not return an error")
 	loaded, err := storage.Load("/path/to/file")
 	assert.NoError(t, err, "Retrieving the writer from storage should not return an error")
@@ -181,8 +201,7 @@ func TestNewConfig(t *testing.T) {
 	assert.Nil(t, err, "Error should be nil")
 	expected := &State{
 		FullName: "/path/to/file",
-		Interval: time.Duration(123),
-		Suffix:   "%c",
+		Config:   *c,
 	}
 	assert.Equal(t, expected, s)
 }

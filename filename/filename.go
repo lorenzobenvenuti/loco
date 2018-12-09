@@ -35,7 +35,7 @@ func (m *suffixFileNameGenerator) add(pattern string, t patternTranslator) {
 }
 
 func (m *suffixFileNameGenerator) suffixFromState(state *state.State) string {
-	tokens := strings.Split(state.Suffix, "%%")
+	tokens := strings.Split(state.Config.Suffix, "%%")
 	for i, _ := range tokens {
 		for k, v := range m.patternTranslators {
 			tokens[i] = strings.Replace(tokens[i], k, v(state), -1)

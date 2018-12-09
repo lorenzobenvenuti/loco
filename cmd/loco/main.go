@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/alecthomas/kingpin"
 	"github.com/lorenzobenvenuti/loco/defaults"
@@ -22,20 +21,16 @@ func createConfig(file string, intervalExpr string) {
 	if err != nil {
 		logger.Fatalf("Cannot convert path %s: %s", file, err)
 	}
-	interval, err := intervals.Parse(intervalExpr)
+	err = intervals.Validate(intervalExpr)
 	if err != nil {
 		logger.Fatalf("Cannot parse interval %s: %s", intervalExpr, err)
 	}
 	storage := state.MustCreateHomeDirStateStorage()
-	_, err = state.NewConfig(storage, absPath, time.Duration(interval), "%c")
+	c := state.NewConfig(intervalExpr, "%c")
+	_, err = state.NewState(storage, absPath, *c)
 	if err != nil {
 		logger.Fatalf("Cannot store configuration: %s", err)
 	}
-}
-
-func defaultInterval() time.Duration {
-	interval := defaults.MustGetInterval(defaults.NewRuntimeDefaultsProvider())
-	return intervals.MustParse(interval)
 }
 
 func collectLogs(file string, tee bool) {
@@ -45,7 +40,8 @@ func collectLogs(file string, tee bool) {
 	}
 	lw, err := logwriter.LoadWriter(absPath)
 	if err != nil {
-		lw, err = logwriter.NewWriter(absPath, defaultInterval(), "%c")
+		interval := defaults.MustGetInterval(defaults.NewRuntimeDefaultsProvider())
+		lw, err = logwriter.NewWriter(absPath, interval, "%c")
 		if err != nil {
 			logger.Fatalf("Cannot create a new writer: %s", err)
 		}

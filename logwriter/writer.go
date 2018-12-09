@@ -55,8 +55,8 @@ func (lw *LogWriter) rotateLogFile() error {
 	}
 	lw.state.RotatedAt = lw.nowProvider.Now()
 	lw.state.Counter++
+	rotated := lw.fileNameGenerator.FileName(lw.state)
 	if utils.Exists(lw.state.FullName) {
-		rotated := lw.fileNameGenerator.FileName(lw.state)
 		err = os.Rename(lw.state.FullName, rotated)
 		if err != nil {
 			return utils.Wrapf(err, "Error renaming log file to %s", rotated)
@@ -117,7 +117,7 @@ func loadWriter(
 	return writer(s, storage, nowProvider, fileNameGenerator), nil
 }
 
-func NewWriter(fullName string, interval time.Duration, suffix string) (io.WriteCloser, error) {
+func NewWriter(fullName string, interval string, suffix string) (io.WriteCloser, error) {
 	storage, err := state.NewHomeDirStateStorage()
 	if err != nil {
 		return nil, err
@@ -130,10 +130,11 @@ func newWriter(
 	nowProvider nowProvider,
 	fileNameGenerator filename.FileNameGenerator,
 	fullName string,
-	interval time.Duration,
+	interval string,
 	suffix string,
 ) (*LogWriter, error) {
-	s, err := state.NewConfig(storage, fullName, interval, suffix)
+	c := state.NewConfig(interval, suffix)
+	s, err := state.NewState(storage, fullName, *c)
 	if err != nil {
 		return nil, err
 	}

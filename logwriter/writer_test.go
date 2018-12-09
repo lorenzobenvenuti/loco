@@ -39,9 +39,9 @@ func newFakeFileNameGenerator() *fakeFileNameGenerator {
 func TestLoadWriter(t *testing.T) {
 	s := &state.State{
 		FullName:  "/path/to/file",
-		Interval:  time.Duration(100),
 		CreatedAt: time.Unix(0, 12),
 		RotatedAt: time.Unix(0, 34),
+		Config:    state.Config{Interval: "1d", Suffix: "%c"},
 	}
 	storage := state.NewMapStorage()
 	storage.Store(s)
@@ -49,16 +49,16 @@ func TestLoadWriter(t *testing.T) {
 	assert.Nil(t, err, "Loading the writer should not return an error")
 	expected := &state.State{
 		FullName:  "/path/to/file",
-		Interval:  time.Duration(100),
 		CreatedAt: time.Unix(0, 12),
 		RotatedAt: time.Unix(0, 34),
+		Config:    state.Config{Interval: "1d", Suffix: "%c"},
 	}
 	assert.Equal(t, expected, lw.state)
 }
 
 func TestNewWriter(t *testing.T) {
 	storage := state.NewMapStorage()
-	lw, err := newWriter(storage, newFakeNowProvider(42), newFakeFileNameGenerator(), "/path/to/file", time.Duration(123), "%c")
+	lw, err := newWriter(storage, newFakeNowProvider(42), newFakeFileNameGenerator(), "/path/to/file", "2d", "%c")
 	assert.Nil(t, err, "Creating the writer should not return an error")
 	s, err := storage.Load("/path/to/file")
 	assert.Nil(t, err, "Retrieving the writer from storage should not return an error")
@@ -66,8 +66,10 @@ func TestNewWriter(t *testing.T) {
 	assert.Nil(t, err, "Error should be nil")
 	expected := &state.State{
 		FullName: "/path/to/file",
-		Interval: time.Duration(123),
-		Suffix:   "%c",
+		Config: state.Config{
+			Interval: "2d",
+			Suffix:   "%c",
+		},
 	}
 	assert.Equal(t, expected, lw.state)
 }
@@ -78,7 +80,7 @@ func TestLogWriterFirstWrite(t *testing.T) {
 	fullpath := path.Join(dir, "file.log")
 	s := &state.State{
 		FullName: fullpath,
-		Interval: time.Duration(100),
+		Config:   state.Config{Interval: "1d", Suffix: "%c"},
 	}
 	storage := state.NewMapStorage()
 	lw := &LogWriter{
@@ -95,7 +97,7 @@ func TestLogWriterFirstWrite(t *testing.T) {
 	assert.NoError(t, err)
 	expected := &state.State{
 		FullName:  fullpath,
-		Interval:  time.Duration(100),
+		Config:    state.Config{Interval: "1d", Suffix: "%c"},
 		CreatedAt: time.Unix(0, 42),
 		RotatedAt: time.Unix(0, 42),
 		Counter:   0,
@@ -112,14 +114,14 @@ func TestLogWriterFileExists(t *testing.T) {
 	storage := state.NewMapStorage()
 	s := &state.State{
 		FullName:  fullpath,
-		Interval:  time.Duration(100),
-		CreatedAt: time.Unix(0, 12),
-		RotatedAt: time.Unix(0, 12),
+		Config:    state.Config{Interval: "1d", Suffix: "%c"},
+		CreatedAt: time.Unix(0, int64(time.Hour)),
+		RotatedAt: time.Unix(0, int64(time.Hour)),
 	}
 	storage.Store(s)
 	lw := &LogWriter{
 		state:        s,
-		nowProvider:  newFakeNowProvider(42),
+		nowProvider:  newFakeNowProvider(int64(time.Hour * 2)),
 		stateStorage: storage,
 	}
 	_, err := lw.Write([]byte("foo"))
@@ -131,9 +133,9 @@ func TestLogWriterFileExists(t *testing.T) {
 	assert.NoError(t, err)
 	expected := &state.State{
 		FullName:  fullpath,
-		Interval:  time.Duration(100),
-		CreatedAt: time.Unix(0, 12),
-		RotatedAt: time.Unix(0, 12),
+		Config:    state.Config{Interval: "1d", Suffix: "%c"},
+		CreatedAt: time.Unix(0, int64(time.Hour)),
+		RotatedAt: time.Unix(0, int64(time.Hour)),
 		Counter:   0,
 	}
 	assert.Equal(t, expected, updated)
@@ -152,14 +154,14 @@ func TestLogWriterFileRotation(t *testing.T) {
 	storage := state.NewMapStorage()
 	s := &state.State{
 		FullName:  fullpath,
-		Interval:  time.Duration(10),
-		CreatedAt: time.Unix(0, 12),
-		RotatedAt: time.Unix(0, 12),
+		Config:    state.Config{Interval: "1d", Suffix: "%c"},
+		CreatedAt: time.Unix(0, int64(time.Hour)),
+		RotatedAt: time.Unix(0, int64(time.Hour)),
 	}
 	storage.Store(s)
 	lw := &LogWriter{
 		state:             s,
-		nowProvider:       newFakeNowProvider(42),
+		nowProvider:       newFakeNowProvider(int64(time.Hour * 27)),
 		stateStorage:      storage,
 		fileNameGenerator: newFakeFileNameGenerator(),
 	}
@@ -175,9 +177,9 @@ func TestLogWriterFileRotation(t *testing.T) {
 	assert.NoError(t, err)
 	expected := &state.State{
 		FullName:  fullpath,
-		Interval:  time.Duration(10),
-		CreatedAt: time.Unix(0, 12),
-		RotatedAt: time.Unix(0, 42),
+		Config:    state.Config{Interval: "1d", Suffix: "%c"},
+		CreatedAt: time.Unix(0, int64(time.Hour)),
+		RotatedAt: time.Unix(0, int64(time.Hour*27)),
 		Counter:   1,
 	}
 	assert.Equal(t, expected, updated)
