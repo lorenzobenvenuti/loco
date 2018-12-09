@@ -178,16 +178,18 @@ func TestEmptyPrettyRotatedAt(t *testing.T) {
 func TestWriteStates(t *testing.T) {
 	s1 := &State{
 		FullName: "/path/to/file1",
+		Config:   Config{Interval: "1d", Suffix: "%c"},
 	}
 	s2 := &State{
 		FullName:  "/path/to/file2",
 		CreatedAt: time.Date(2018, 11, 18, 17, 15, 12, 0, time.UTC),
 		RotatedAt: time.Date(2018, 11, 18, 18, 15, 12, 0, time.UTC),
+		Config:    Config{Interval: "2w", Suffix: "%Y%m%d"},
 	}
 	var buf bytes.Buffer
 	err := WriteStates(&buf, []*State{s1, s2})
 	assert.NoError(t, err)
-	assert.Equal(t, "FILE           CREATED AT          ROTATED AT\n/path/to/file1 -                   -\n/path/to/file2 18 Nov 18 17:15 UTC 18 Nov 18 18:15 UTC\n\n", buf.String())
+	assert.Equal(t, "FILE           CREATED AT          ROTATED AT          INTERVAL SUFFIX\n/path/to/file1 -                   -                   1d       %c\n/path/to/file2 18 Nov 18 17:15 UTC 18 Nov 18 18:15 UTC 2w       %Y%m%d\n\n", buf.String())
 }
 
 func TestNewConfig(t *testing.T) {

@@ -204,7 +204,8 @@ func NewMapStorage() StateStorage {
 }
 
 func WriteStates(w io.Writer, states []*State) error {
-	t, err := template.New("list").Parse("FILE\tCREATED AT\tROTATED AT\n{{range .}}{{.FullName}}\t{{.PrettyCreatedAt}}\t{{.PrettyRotatedAt}}\n{{end}}\n")
+	t, err := template.New("list").Parse("FILE\tCREATED AT\tROTATED AT\tINTERVAL\tSUFFIX\n" +
+		"{{range .}}{{.FullName}}\t{{.PrettyCreatedAt}}\t{{.PrettyRotatedAt}}\t{{.Config.Interval}}\t{{.Config.Suffix}}\n{{end}}\n")
 	if err != nil {
 		return err
 	}
