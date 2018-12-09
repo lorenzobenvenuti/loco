@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -16,17 +15,17 @@ import (
 
 var logger = log.New(os.Stderr, "", 0)
 
-func createConfig(file string, intervalExpr string) {
+func createConfig(file string, interval string, suffix string) {
 	absPath, err := filepath.Abs(file)
 	if err != nil {
 		logger.Fatalf("Cannot convert path %s: %s", file, err)
 	}
-	err = intervals.Validate(intervalExpr)
+	err = intervals.Validate(interval)
 	if err != nil {
-		logger.Fatalf("Cannot parse interval %s: %s", intervalExpr, err)
+		logger.Fatalf("Cannot parse interval %s: %s", interval, err)
 	}
 	storage := state.MustCreateHomeDirStateStorage()
-	c := state.NewConfig(intervalExpr, "%c")
+	c := state.NewConfig(interval, suffix)
 	_, err = state.NewState(storage, absPath, *c)
 	if err != nil {
 		logger.Fatalf("Cannot store configuration: %s", err)
@@ -40,8 +39,10 @@ func collectLogs(file string, tee bool) {
 	}
 	lw, err := logwriter.LoadWriter(absPath)
 	if err != nil {
-		interval := defaults.MustGetInterval(defaults.NewRuntimeDefaultsProvider())
-		lw, err = logwriter.NewWriter(absPath, interval, "%c")
+		p := defaults.NewRuntimeDefaultsProvider()
+		interval := defaults.MustGetInterval(p)
+		suffix := defaults.MustGetSuffix(p)
+		lw, err = logwriter.NewWriter(absPath, interval, suffix)
 		if err != nil {
 			logger.Fatalf("Cannot create a new writer: %s", err)
 		}
@@ -74,15 +75,25 @@ func removeLogFile(name string) {
 	}
 }
 
-func showOrSetDefaults(intervalExpr string) {
-	if intervalExpr == "" {
-		fmt.Println(defaults.DefaultsToString(defaults.NewStaticDefaultsProvider()))
-	} else {
-		err := defaults.SetDefaultInterval(intervalExpr)
+func showOrSetDefaults(interval string, suffix string) {
+	if interval == "" && suffix == "" {
+		defaults.WriteDefaults(os.Stdout, defaults.NewStaticDefaultsProvider())
+		return
+	}
+	if interval != "" {
+		err := defaults.SetDefaultInterval(interval)
 		if err == nil {
-			logger.Printf("Default interval set to %s", intervalExpr)
+			logger.Printf("Default interval set to %s", interval)
 		} else {
 			logger.Fatalf("Cannot set default interval: %s", err.Error())
+		}
+	}
+	if suffix != "" {
+		err := defaults.SetDefaultSuffix(suffix)
+		if err == nil {
+			logger.Printf("Default suffix set to %s", suffix)
+		} else {
+			logger.Fatalf("Cannot set default suffix: %s", err.Error())
 		}
 	}
 }
@@ -91,6 +102,7 @@ func main() {
 	app := kingpin.New("loco", "A log collector")
 	config := app.Command("config", "Configures a log file")
 	configInterval := config.Flag("interval", "Rotate interval").Short('i').String()
+	configSuffix := config.Flag("suffix", "Rotated file suffix").Short('s').String()
 	configFile := config.Arg("file", "Log file").Required().String()
 	collect := app.Command("collect", "Collects stdin and redirects to a log file")
 	collectTee := collect.Flag("tee", "Write to log file and stdout").Short('t').Bool()
@@ -100,9 +112,10 @@ func main() {
 	removeFile := remove.Arg("file", "Log file").Required().String()
 	defaults := app.Command("defaults", "Shows or sets default options")
 	defaultsInterval := defaults.Flag("interval", "Rotate interval").Short('i').String()
+	defaultsSuffix := defaults.Flag("suffix", "Rotated file suffix").Short('s').String()
 	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
 	case config.FullCommand():
-		createConfig(*configFile, *configInterval)
+		createConfig(*configFile, *configInterval, *configSuffix)
 	case collect.FullCommand():
 		collectLogs(*collectFile, *collectTee)
 	case list.FullCommand():
@@ -110,6 +123,6 @@ func main() {
 	case remove.FullCommand():
 		removeLogFile(*removeFile)
 	case defaults.FullCommand():
-		showOrSetDefaults(*defaultsInterval)
+		showOrSetDefaults(*defaultsInterval, *defaultsSuffix)
 	}
 }

@@ -4,32 +4,36 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
 
 	"github.com/lorenzobenvenuti/loco/intervals"
+	"github.com/lorenzobenvenuti/loco/state"
 	"github.com/lorenzobenvenuti/loco/utils"
 )
 
 type DefaultsProvider interface {
 	Interval() (string, error)
+	Suffix() (string, error)
 }
 
 type constDefaultsProvider struct {
 	interval string
+	suffix   string
 }
 
 func (p *constDefaultsProvider) Interval() (string, error) {
 	return p.interval, nil
 }
 
-type fileDefaultsProvider struct {
-	path string
+func (p *constDefaultsProvider) Suffix() (string, error) {
+	return p.suffix, nil
 }
 
-type defaults struct {
-	Interval string
+type fileDefaultsProvider struct {
+	path string
 }
 
 func (p *fileDefaultsProvider) Interval() (string, error) {
@@ -40,16 +44,24 @@ func (p *fileDefaultsProvider) Interval() (string, error) {
 	return d.Interval, nil
 }
 
+func (p *fileDefaultsProvider) Suffix() (string, error) {
+	d, err := p.loadDefaults()
+	if err != nil {
+		return "", err
+	}
+	return d.Suffix, nil
+}
+
 func (p *fileDefaultsProvider) hasDefaults() bool {
 	return utils.Exists(p.path)
 }
 
-func (p *fileDefaultsProvider) loadDefaults() (*defaults, error) {
+func (p *fileDefaultsProvider) loadDefaults() (*state.Config, error) {
 	bytes, err := ioutil.ReadFile(p.path)
 	if err != nil {
 		return nil, err
 	}
-	d := &defaults{}
+	d := &state.Config{}
 	err = json.Unmarshal(bytes, d)
 	if err != nil {
 		return nil, err
@@ -57,7 +69,7 @@ func (p *fileDefaultsProvider) loadDefaults() (*defaults, error) {
 	return d, nil
 }
 
-func (p *fileDefaultsProvider) writeDefaults(d *defaults) error {
+func (p *fileDefaultsProvider) writeDefaults(d *state.Config) error {
 	bytes, err := json.Marshal(d)
 	if err != nil {
 		return err
@@ -88,6 +100,10 @@ func (p *envDefaultsProvider) Interval() (string, error) {
 	return interval, nil
 }
 
+func (p *envDefaultsProvider) Suffix() (string, error) {
+	return p.envVariableReader.GetEnv("LOCO_SUFFIX"), nil
+}
+
 type compositeDefaultsProvider struct {
 	providers []DefaultsProvider
 }
@@ -102,12 +118,30 @@ func (p *compositeDefaultsProvider) Interval() (string, error) {
 	return "", errors.New("Cannot find a default interval")
 }
 
+func (p *compositeDefaultsProvider) Suffix() (string, error) {
+	for _, p := range p.providers {
+		suffix, err := p.Suffix()
+		if err == nil && suffix != "" {
+			return suffix, nil
+		}
+	}
+	return "", errors.New("Cannot find a default suffix")
+}
+
 func MustGetInterval(defaultsProvider DefaultsProvider) string {
 	interval, err := defaultsProvider.Interval()
 	if err != nil {
 		panic(err)
 	}
 	return interval
+}
+
+func MustGetSuffix(defaultsProvider DefaultsProvider) string {
+	suffix, err := defaultsProvider.Suffix()
+	if err != nil {
+		panic(err)
+	}
+	return suffix
 }
 
 func appDirFileDefaultsProvider() (*fileDefaultsProvider, error) {
@@ -131,7 +165,7 @@ func environmentDefaultsProvider() DefaultsProvider {
 }
 
 func builtInDefaultsProvider() DefaultsProvider {
-	return &constDefaultsProvider{"1d"}
+	return &constDefaultsProvider{interval: "1d", suffix: "%c"}
 }
 
 func NewStaticDefaultsProvider() DefaultsProvider {
@@ -154,12 +188,22 @@ func SetDefaultInterval(interval string) error {
 		return err
 	}
 	p := NewStaticDefaultsProvider()
-	d := &defaults{}
-	d.Interval = MustGetInterval(p)
+	d := &state.Config{}
+	d.Interval = interval
+	d.Suffix = MustGetSuffix(p)
 	return mustGetAppDirFileDefaultsProvider().writeDefaults(d)
 }
 
-func DefaultsToString(provider DefaultsProvider) string {
+func SetDefaultSuffix(suffix string) error {
+	p := NewStaticDefaultsProvider()
+	d := &state.Config{}
+	d.Interval = MustGetInterval(p)
+	d.Suffix = suffix
+	return mustGetAppDirFileDefaultsProvider().writeDefaults(d)
+}
+
+func WriteDefaults(writer io.Writer, provider DefaultsProvider) {
 	interval := MustGetInterval(provider)
-	return fmt.Sprintf("Interval: %s", interval)
+	suffix := MustGetSuffix(provider)
+	io.WriteString(writer, fmt.Sprintf("Interval\t%s\nSuffix\t%s\n", interval, suffix))
 }
