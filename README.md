@@ -6,7 +6,7 @@ In the last weeks I've found myself using `logrotate` to organize log files of s
 
 # Usage
 
-In its simpler form you can use `loco` like this:
+In its simplest form you can use `loco` like this:
 
 ```bash
 $ some-command | loco collect /path/to/log/file
@@ -36,7 +36,7 @@ Valid intervals have the form `\d+[mhdwM]`
 * `h` stands for hour
 * `d` stands for days
 * `w` stands for weeks
-` `M` stands for months
+* `M` stands for months
 
 ## Configurations
 
@@ -100,3 +100,8 @@ to `.zshrc`.
 * Custom suffix
 * Save rotate history in state?
 * Max rotations
+* Clone configurations
+* Post rotate actions:
+    * Gzip
+    * Move/copy to another directory
+    * Move/copy to a remote destination (S3 bucket, ...)
