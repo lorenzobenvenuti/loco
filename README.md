@@ -20,13 +20,34 @@ $ some-command | loco collect /path/to/log/file
   $ loco config -i 1w /path/to/log/file.log
   ```
 
-* Change the defaults; if you want to set all the log files rotate, by default, every 3 days:
+  A custom suffix can be specified using the `-s` parameter:
 
   ```bash
-  $ loco defaults -i 3d
+  $ loco config -i 1w -s %Y%m%d /path/to/log/file.log
+  ```
+
+  The following values will be replaced at runtime:
+
+  * `%%`: literal `%`
+  * `%c`: number of times the file has been rotated
+  * `%Y`: year (four digits)
+  * `%m`: month (01 to 12)
+  * `%d`: day (01 to 31)
+  * `%H`: hour (00 to 23)
+  * `%M`: minute (00 to 59)
+  * `%S`: second (00 to 59)
+
+  Default value is `%c`
+
+* Change the defaults; if you want to set all the log files rotate, by default, every 3 days using a timestamp suffix:
+
+  ```bash
+  $ loco defaults -i 3d -s %Y%m%d%H%M%S
   ```
 
 * Set the `LOCO_INTERVAL` environment variable to a valid interval
+
+* Set the `LOCO_SUFFIX` environment variable to a suffix
 
 ## Valid intervals
 
@@ -97,7 +118,7 @@ to `.zshrc`.
 
 # TODO
 
-* Custom suffix
+* ~~Custom suffix~~
 * Save rotate history in state?
 * Max rotations
 * Clone configurations
