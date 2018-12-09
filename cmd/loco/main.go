@@ -27,7 +27,7 @@ func createConfig(file string, intervalExpr string) {
 		logger.Fatalf("Cannot parse interval %s: %s", intervalExpr, err)
 	}
 	storage := state.MustCreateHomeDirStateStorage()
-	_, err = state.NewConfig(storage, absPath, time.Duration(interval))
+	_, err = state.NewConfig(storage, absPath, time.Duration(interval), "%c")
 	if err != nil {
 		logger.Fatalf("Cannot store configuration: %s", err)
 	}
@@ -45,7 +45,7 @@ func collectLogs(file string, tee bool) {
 	}
 	lw, err := logwriter.LoadWriter(absPath)
 	if err != nil {
-		lw, err = logwriter.NewWriter(absPath, defaultInterval())
+		lw, err = logwriter.NewWriter(absPath, defaultInterval(), "%c")
 		if err != nil {
 			logger.Fatalf("Cannot create a new writer: %s", err)
 		}

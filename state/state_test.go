@@ -173,7 +173,7 @@ func TestWriteStates(t *testing.T) {
 
 func TestNewConfig(t *testing.T) {
 	storage := NewMapStorage()
-	s, err := NewConfig(storage, "/path/to/file", time.Duration(123))
+	s, err := NewConfig(storage, "/path/to/file", time.Duration(123), "%c")
 	assert.NoError(t, err, "Creating the config should not return an error")
 	loaded, err := storage.Load("/path/to/file")
 	assert.NoError(t, err, "Retrieving the writer from storage should not return an error")
@@ -182,6 +182,7 @@ func TestNewConfig(t *testing.T) {
 	expected := &State{
 		FullName: "/path/to/file",
 		Interval: time.Duration(123),
+		Suffix:   "%c",
 	}
 	assert.Equal(t, expected, s)
 }

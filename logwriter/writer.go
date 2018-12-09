@@ -1,11 +1,11 @@
 package logwriter
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"time"
 
+	"github.com/lorenzobenvenuti/loco/filename"
 	"github.com/lorenzobenvenuti/loco/state"
 	"github.com/lorenzobenvenuti/loco/utils"
 )
@@ -22,11 +22,14 @@ func (t *timeNowProvider) Now() time.Time {
 
 var defaultNowProvider = &timeNowProvider{}
 
+var fileNameGenerator = filename.NewFileNameGenerator()
+
 type LogWriter struct {
-	state        *state.State
-	file         *os.File
-	stateStorage state.StateStorage
-	nowProvider  nowProvider
+	state             *state.State
+	file              *os.File
+	stateStorage      state.StateStorage
+	nowProvider       nowProvider
+	fileNameGenerator filename.FileNameGenerator
 }
 
 func (lw *LogWriter) openLogFile() (*os.File, error) {
@@ -50,8 +53,10 @@ func (lw *LogWriter) rotateLogFile() error {
 	if err != nil {
 		return utils.Wrap(err, "Error closing log writer")
 	}
+	lw.state.RotatedAt = lw.nowProvider.Now()
+	lw.state.Counter++
 	if utils.Exists(lw.state.FullName) {
-		rotated := fmt.Sprintf("%s.%d", lw.state.FullName, lw.state.Counter)
+		rotated := lw.fileNameGenerator.FileName(lw.state)
 		err = os.Rename(lw.state.FullName, rotated)
 		if err != nil {
 			return utils.Wrapf(err, "Error renaming log file to %s", rotated)
@@ -61,10 +66,8 @@ func (lw *LogWriter) rotateLogFile() error {
 	if err != nil {
 		return utils.Wrap(err, "Error opening log writer")
 	}
-	lw.state.RotatedAt = lw.nowProvider.Now()
-	lw.state.Counter++
-	lw.stateStorage.Store(lw.state)
 	lw.file = f
+	lw.stateStorage.Store(lw.state)
 	return nil
 }
 
@@ -98,37 +101,55 @@ func LoadWriter(fullName string) (io.WriteCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	return loadWriter(storage, defaultNowProvider, fullName)
+	return loadWriter(storage, defaultNowProvider, fileNameGenerator, fullName)
 }
 
-func loadWriter(storage state.StateStorage, nowProvider nowProvider, fullName string) (*LogWriter, error) {
+func loadWriter(
+	storage state.StateStorage,
+	nowProvider nowProvider,
+	fileNameGenerator filename.FileNameGenerator,
+	fullName string,
+) (*LogWriter, error) {
 	s, err := storage.Load(fullName)
 	if err != nil {
 		return nil, err
 	}
-	return &LogWriter{
-		state:        s,
-		stateStorage: storage,
-		nowProvider:  nowProvider,
-	}, nil
+	return writer(s, storage, nowProvider, fileNameGenerator), nil
 }
 
-func NewWriter(fullName string, interval time.Duration) (io.WriteCloser, error) {
+func NewWriter(fullName string, interval time.Duration, suffix string) (io.WriteCloser, error) {
 	storage, err := state.NewHomeDirStateStorage()
 	if err != nil {
 		return nil, err
 	}
-	return newWriter(storage, defaultNowProvider, fullName, interval)
+	return newWriter(storage, defaultNowProvider, fileNameGenerator, fullName, interval, suffix)
 }
 
-func newWriter(storage state.StateStorage, nowProvider nowProvider, fullName string, interval time.Duration) (*LogWriter, error) {
-	s, err := state.NewConfig(storage, fullName, interval)
+func newWriter(
+	storage state.StateStorage,
+	nowProvider nowProvider,
+	fileNameGenerator filename.FileNameGenerator,
+	fullName string,
+	interval time.Duration,
+	suffix string,
+) (*LogWriter, error) {
+	s, err := state.NewConfig(storage, fullName, interval, suffix)
 	if err != nil {
 		return nil, err
 	}
+	return writer(s, storage, nowProvider, fileNameGenerator), nil
+}
+
+func writer(
+	s *state.State,
+	storage state.StateStorage,
+	nowProvider nowProvider,
+	fileNameGenerator filename.FileNameGenerator,
+) *LogWriter {
 	return &LogWriter{
-		state:        s,
-		stateStorage: storage,
-		nowProvider:  nowProvider,
-	}, nil
+		state:             s,
+		stateStorage:      storage,
+		nowProvider:       nowProvider,
+		fileNameGenerator: fileNameGenerator,
+	}
 }

@@ -208,10 +208,11 @@ func WriteStates(w io.Writer, states []*State) error {
 	return nil
 }
 
-func NewConfig(storage StateStorage, fullName string, interval time.Duration) (*State, error) {
+func NewConfig(storage StateStorage, fullName string, interval time.Duration, suffix string) (*State, error) {
 	s := &State{
 		FullName: fullName,
 		Interval: interval,
+		Suffix:   suffix,
 	}
 	return s, storage.Store(s)
 }
