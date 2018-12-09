@@ -20,6 +20,7 @@ type State struct {
 	RotatedAt time.Time
 	Interval  time.Duration
 	Counter   int
+	Suffix    string
 }
 
 func (s *State) formatDate(t time.Time) string {
