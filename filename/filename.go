@@ -13,37 +13,6 @@ type FileNameGenerator interface {
 	FileName(state *logwriter.State) string
 }
 
-type suffixFileNameGenerator struct{}
-
-type translator func(s *logwriter.State) string
-
-type translatorRegistry struct {
-	translators map[string]translator
-}
-
-func (r *translatorRegistry) add(pattern string, t translator) {
-	r.translators[pattern] = t
-}
-
-func (r *translatorRegistry) translate(state *logwriter.State, text string) string {
-	for k, v := range r.translators {
-		text = strings.Replace(text, k, v(state), -1)
-	}
-	return text
-}
-
-var registry *translatorRegistry = &translatorRegistry{make(map[string]translator)}
-
-func init() {
-	registry.add("%c", func(s *logwriter.State) string { return strconv.Itoa(s.Counter) })
-	registry.add("%Y", func(s *logwriter.State) string { return strconv.Itoa(s.RotatedAt.Year()) })
-	registry.add("%m", func(s *logwriter.State) string { return fmt.Sprintf("%02d", int(s.RotatedAt.Month())) })
-	registry.add("%d", func(s *logwriter.State) string { return fmt.Sprintf("%02d", s.RotatedAt.Day()) })
-	registry.add("%H", func(s *logwriter.State) string { return fmt.Sprintf("%02d", s.RotatedAt.Hour()) })
-	registry.add("%M", func(s *logwriter.State) string { return fmt.Sprintf("%02d", s.RotatedAt.Minute()) })
-	registry.add("%S", func(s *logwriter.State) string { return fmt.Sprintf("%02d", s.RotatedAt.Second()) })
-}
-
 func splitBaseNameAndExtension(file string) (string, string) {
 	ext := path.Ext(file)
 	var basename string
@@ -55,11 +24,22 @@ func splitBaseNameAndExtension(file string) (string, string) {
 	return basename, ext
 }
 
-func suffixFromState(state *logwriter.State) string {
-	suffix := state.Suffix
-	tokens := strings.Split(suffix, "%%")
-	for i, token := range tokens {
-		tokens[i] = registry.translate(state, token)
+type patternTranslator func(s *logwriter.State) string
+
+type suffixFileNameGenerator struct {
+	patternTranslators map[string]patternTranslator
+}
+
+func (m *suffixFileNameGenerator) add(pattern string, t patternTranslator) {
+	m.patternTranslators[pattern] = t
+}
+
+func (m *suffixFileNameGenerator) suffixFromState(state *logwriter.State) string {
+	tokens := strings.Split(state.Suffix, "%%")
+	for i, _ := range tokens {
+		for k, v := range m.patternTranslators {
+			tokens[i] = strings.Replace(tokens[i], k, v(state), -1)
+		}
 	}
 	return strings.Join(tokens, "%")
 }
@@ -67,10 +47,18 @@ func suffixFromState(state *logwriter.State) string {
 func (m *suffixFileNameGenerator) FileName(state *logwriter.State) string {
 	dir, file := path.Split(state.FullName)
 	basename, ext := splitBaseNameAndExtension(file)
-	suffix := suffixFromState(state)
+	suffix := m.suffixFromState(state)
 	return path.Join(dir, fmt.Sprintf("%s.%s%s", basename, suffix, ext))
 }
 
 func NewFileNameGenerator() FileNameGenerator {
-	return &suffixFileNameGenerator{}
+	generator := &suffixFileNameGenerator{make(map[string]patternTranslator)}
+	generator.add("%c", func(s *logwriter.State) string { return strconv.Itoa(s.Counter) })
+	generator.add("%Y", func(s *logwriter.State) string { return strconv.Itoa(s.RotatedAt.Year()) })
+	generator.add("%m", func(s *logwriter.State) string { return fmt.Sprintf("%02d", int(s.RotatedAt.Month())) })
+	generator.add("%d", func(s *logwriter.State) string { return fmt.Sprintf("%02d", s.RotatedAt.Day()) })
+	generator.add("%H", func(s *logwriter.State) string { return fmt.Sprintf("%02d", s.RotatedAt.Hour()) })
+	generator.add("%M", func(s *logwriter.State) string { return fmt.Sprintf("%02d", s.RotatedAt.Minute()) })
+	generator.add("%S", func(s *logwriter.State) string { return fmt.Sprintf("%02d", s.RotatedAt.Second()) })
+	return generator
 }
