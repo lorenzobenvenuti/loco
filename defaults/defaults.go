@@ -14,6 +14,134 @@ import (
 	"github.com/lorenzobenvenuti/loco/utils"
 )
 
+type DefaultConfigProvider interface {
+	DefaultConfig() *state.Config
+}
+
+type confStringReader interface {
+	confString() (string, error);
+}
+
+type constConfStringReader struct {
+	value string
+}
+
+func (r *constConfStringReader) confString() (string, error) {
+	return r.value, nil
+}
+
+type envConfStringReader struct {
+	key string
+}
+
+func (r *envConfStringReader) confString() (string, error) {
+	return os.Getenv(r.key), nil
+}
+
+type jsonFileConfStringReader struct {
+	path string
+	key string
+}
+
+func (r *jsonFileConfStringReader) confString() (string, error) {
+	m, err := r.loadDefaults()
+	if err != nil {
+		return "", err
+	}
+	return m[r.key].(string), nil
+}
+
+func (r *jsonFileConfStringReader) hasDefaults() bool {
+	return utils.Exists(r.path)
+}
+
+func (r *jsonFileConfStringReader) loadDefaults() (map[string]interface{}, error) {
+	bytes, err := ioutil.ReadFile(r.path)
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[string]interface{})
+	err = json.Unmarshal(bytes, &m)
+	if err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (r *jsonFileConfStringReader) writeDefaults(m map[string]interface{}) error {
+	bytes, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(r.path, bytes, 0755)
+}
+
+type compositeConfStringReader struct {
+	readers []confStringReader;
+}
+
+func (r *compositeConfStringReader) confString() (string, error) {
+	for _, reader := range r.readers {
+		s, err := reader.confString()
+		if err == nil && s != "" {
+			return s, nil
+		}
+	}
+	return "", errors.New("Cannot retrieve configuration string")
+}
+
+type intervalConfStringReader struct {
+	delegate confStringReader
+}
+
+func (r *intervalConfStringReader) confString() (string, error) {
+	s, err := r.delegate.confString()
+	if err != nil {
+		return "", err
+	}
+	err = intervals.Validate(s)
+	if err != nil {
+		return "", err
+	}
+	return s, nil
+}
+
+func mustGetConfString(confString string, err error) string {
+	if err != nil {
+		panic(err)
+	}
+	return confString
+}
+
+type defaultConfigProvider struct {
+	intervalConfStringReader confStringReader
+	suffixConfStringReader confStringReader
+}
+
+func (p *defaultConfigProvider) DefaultConfig() *state.Config {
+	return &state.Config{
+		Interval: mustGetConfString(p.intervalConfStringReader.confString()),
+		Suffix: mustGetConfString(p.suffixConfStringReader.confString()),
+	}
+}
+
+func NewDefaultConfigProvider() DefaultConfigProvider {
+	intervalConfStringReader := []confStringReader {
+		&intervalConfStringReader{&envConfStringReader{"LOCO_INTERVAL"}},
+		&jsonFileConfStringReader{"/path/to/file", "interval"},
+		&constConfStringReader{"1d"},
+	}
+	suffixConfStringReader := []confStringReader {
+		&envConfStringReader{"LOCO_SUFFIX"},
+		&jsonFileConfStringReader{"/path/to/file", "suffix"},
+		&constConfStringReader{"%c"},
+	}
+	return &defaultConfigProvider{
+		intervalConfStringReader: &compositeConfStringReader{intervalConfStringReader},
+		suffixConfStringReader: &compositeConfStringReader{suffixConfStringReader},
+	}
+}
+
 type DefaultsProvider interface {
 	Interval() (string, error)
 	Suffix() (string, error)
