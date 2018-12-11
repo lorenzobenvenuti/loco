@@ -53,6 +53,9 @@ func (s *fileStateStorage) Remove(fullName string) error {
 }
 
 func (s *fileStateStorage) List() ([]*State, error) {
+	if !utils.Exists(s.dir) {
+		return []*State{}, nil
+	}
 	files, err := ioutil.ReadDir(s.dir)
 	if err != nil {
 		return nil, err

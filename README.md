@@ -122,6 +122,7 @@ to `.zshrc`.
 * Save rotate history in state?
 * Max rotations
 * Clone configurations
+* Autocompletion hints
 * Post rotate actions:
     * Gzip
     * Move/copy to another directory

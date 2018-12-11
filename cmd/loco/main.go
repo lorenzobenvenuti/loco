@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/alecthomas/kingpin"
 	"github.com/lorenzobenvenuti/loco/defaults"
@@ -16,16 +17,20 @@ import (
 var logger = log.New(os.Stderr, "", 0)
 
 func createConfig(file string, interval string, suffix string) {
+	var err error
 	absPath, err := filepath.Abs(file)
 	if err != nil {
 		logger.Fatalf("Cannot convert path %s: %s", file, err)
 	}
-	err = intervals.Validate(interval)
-	if err != nil {
-		logger.Fatalf("Cannot parse interval %s: %s", interval, err)
+	var duration time.Duration
+	if interval != "" {
+		duration, err = intervals.Parse(interval)
+		if err != nil {
+			logger.Fatalf("Cannot parse interval %s: %s", interval, err)
+		}
 	}
 	storage := state.MustCreateHomeDirStateStorage()
-	c := state.NewConfig(interval, suffix)
+	c := defaults.MergeWithDefaultConfig(state.NewConfig(duration, suffix))
 	_, err = state.NewState(storage, absPath, *c)
 	if err != nil {
 		logger.Fatalf("Cannot store configuration: %s", err)
@@ -39,10 +44,8 @@ func collectLogs(file string, tee bool) {
 	}
 	lw, err := logwriter.LoadWriter(absPath)
 	if err != nil {
-		p := defaults.NewRuntimeDefaultsProvider()
-		interval := defaults.MustGetInterval(p)
-		suffix := defaults.MustGetSuffix(p)
-		lw, err = logwriter.NewWriter(absPath, interval, suffix)
+		c := defaults.DefaultConfig()
+		lw, err = logwriter.NewWriter(absPath, c)
 		if err != nil {
 			logger.Fatalf("Cannot create a new writer: %s", err)
 		}
@@ -77,24 +80,21 @@ func removeLogFile(name string) {
 
 func showOrSetDefaults(interval string, suffix string) {
 	if interval == "" && suffix == "" {
-		defaults.WriteDefaults(os.Stdout, defaults.NewStaticDefaultsProvider())
+		defaults.WriteDefaultConfig(os.Stdout)
 		return
 	}
+	var duration time.Duration
+	var err error
 	if interval != "" {
-		err := defaults.SetDefaultInterval(interval)
-		if err == nil {
-			logger.Printf("Default interval set to %s", interval)
-		} else {
+		duration, err = intervals.Parse(interval)
+		if err != nil {
 			logger.Fatalf("Cannot set default interval: %s", err.Error())
 		}
 	}
-	if suffix != "" {
-		err := defaults.SetDefaultSuffix(suffix)
-		if err == nil {
-			logger.Printf("Default suffix set to %s", suffix)
-		} else {
-			logger.Fatalf("Cannot set default suffix: %s", err.Error())
-		}
+	c := defaults.MergeWithDefaultConfig(state.NewConfig(duration, suffix))
+	err = defaults.SetDefaultConfig(c)
+	if err != nil {
+		logger.Fatalf("Cannot save defaults: %s", err)
 	}
 }
 

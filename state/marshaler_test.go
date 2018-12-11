@@ -14,7 +14,7 @@ func TestJsonStateMarshaler(t *testing.T) {
 		RotatedAt: time.Unix(0, 2000000),
 		Counter:   42,
 		Config: Config{
-			Interval: "2d",
+			Interval: time.Hour * 48,
 			Suffix:   "%c",
 		},
 	}

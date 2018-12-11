@@ -2,13 +2,14 @@ package state
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewConfig(t *testing.T) {
 	storage := NewMapStorage()
-	c := NewConfig("1d", "%c")
+	c := NewConfig(time.Hour*24, "%c")
 	s, err := NewState(storage, "/path/to/file", *c)
 	assert.NoError(t, err, "Creating the config should not return an error")
 	loaded, err := storage.Load("/path/to/file")

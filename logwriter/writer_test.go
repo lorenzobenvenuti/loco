@@ -41,7 +41,7 @@ func TestLoadWriter(t *testing.T) {
 		FullName:  "/path/to/file",
 		CreatedAt: time.Unix(0, 12),
 		RotatedAt: time.Unix(0, 34),
-		Config:    state.Config{Interval: "1d", Suffix: "%c"},
+		Config:    state.Config{Interval: time.Hour * 24, Suffix: "%c"},
 	}
 	storage := state.NewMapStorage()
 	storage.Store(s)
@@ -51,14 +51,15 @@ func TestLoadWriter(t *testing.T) {
 		FullName:  "/path/to/file",
 		CreatedAt: time.Unix(0, 12),
 		RotatedAt: time.Unix(0, 34),
-		Config:    state.Config{Interval: "1d", Suffix: "%c"},
+		Config:    state.Config{Interval: time.Hour * 24, Suffix: "%c"},
 	}
 	assert.Equal(t, expected, lw.state)
 }
 
 func TestNewWriter(t *testing.T) {
 	storage := state.NewMapStorage()
-	lw, err := newWriter(storage, newFakeNowProvider(42), newFakeFileNameGenerator(), "/path/to/file", "2d", "%c")
+	config := state.NewConfig(time.Hour*48, "%c")
+	lw, err := newWriter(storage, newFakeNowProvider(42), newFakeFileNameGenerator(), "/path/to/file", config)
 	assert.Nil(t, err, "Creating the writer should not return an error")
 	s, err := storage.Load("/path/to/file")
 	assert.Nil(t, err, "Retrieving the writer from storage should not return an error")
@@ -67,7 +68,7 @@ func TestNewWriter(t *testing.T) {
 	expected := &state.State{
 		FullName: "/path/to/file",
 		Config: state.Config{
-			Interval: "2d",
+			Interval: time.Hour * 48,
 			Suffix:   "%c",
 		},
 	}
@@ -80,7 +81,7 @@ func TestLogWriterFirstWrite(t *testing.T) {
 	fullpath := path.Join(dir, "file.log")
 	s := &state.State{
 		FullName: fullpath,
-		Config:   state.Config{Interval: "1d", Suffix: "%c"},
+		Config:   state.Config{Interval: time.Hour * 24, Suffix: "%c"},
 	}
 	storage := state.NewMapStorage()
 	lw := &LogWriter{
@@ -97,7 +98,7 @@ func TestLogWriterFirstWrite(t *testing.T) {
 	assert.NoError(t, err)
 	expected := &state.State{
 		FullName:  fullpath,
-		Config:    state.Config{Interval: "1d", Suffix: "%c"},
+		Config:    state.Config{Interval: time.Hour * 24, Suffix: "%c"},
 		CreatedAt: time.Unix(0, 42),
 		RotatedAt: time.Unix(0, 42),
 		Counter:   0,
@@ -114,7 +115,7 @@ func TestLogWriterFileExists(t *testing.T) {
 	storage := state.NewMapStorage()
 	s := &state.State{
 		FullName:  fullpath,
-		Config:    state.Config{Interval: "1d", Suffix: "%c"},
+		Config:    state.Config{Interval: time.Hour * 24, Suffix: "%c"},
 		CreatedAt: time.Unix(0, int64(time.Hour)),
 		RotatedAt: time.Unix(0, int64(time.Hour)),
 	}
@@ -133,7 +134,7 @@ func TestLogWriterFileExists(t *testing.T) {
 	assert.NoError(t, err)
 	expected := &state.State{
 		FullName:  fullpath,
-		Config:    state.Config{Interval: "1d", Suffix: "%c"},
+		Config:    state.Config{Interval: time.Hour * 24, Suffix: "%c"},
 		CreatedAt: time.Unix(0, int64(time.Hour)),
 		RotatedAt: time.Unix(0, int64(time.Hour)),
 		Counter:   0,
@@ -154,7 +155,7 @@ func TestLogWriterFileRotation(t *testing.T) {
 	storage := state.NewMapStorage()
 	s := &state.State{
 		FullName:  fullpath,
-		Config:    state.Config{Interval: "1d", Suffix: "%c"},
+		Config:    state.Config{Interval: time.Hour * 24, Suffix: "%c"},
 		CreatedAt: time.Unix(0, int64(time.Hour)),
 		RotatedAt: time.Unix(0, int64(time.Hour)),
 	}
@@ -177,7 +178,7 @@ func TestLogWriterFileRotation(t *testing.T) {
 	assert.NoError(t, err)
 	expected := &state.State{
 		FullName:  fullpath,
-		Config:    state.Config{Interval: "1d", Suffix: "%c"},
+		Config:    state.Config{Interval: time.Hour * 24, Suffix: "%c"},
 		CreatedAt: time.Unix(0, int64(time.Hour)),
 		RotatedAt: time.Unix(0, int64(time.Hour*27)),
 		Counter:   1,

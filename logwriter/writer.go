@@ -117,12 +117,12 @@ func loadWriter(
 	return writer(s, storage, nowProvider, fileNameGenerator), nil
 }
 
-func NewWriter(fullName string, interval string, suffix string) (io.WriteCloser, error) {
+func NewWriter(fullName string, config *state.Config) (io.WriteCloser, error) {
 	storage, err := state.NewHomeDirStateStorage()
 	if err != nil {
 		return nil, err
 	}
-	return newWriter(storage, defaultNowProvider, fileNameGenerator, fullName, interval, suffix)
+	return newWriter(storage, defaultNowProvider, fileNameGenerator, fullName, config)
 }
 
 func newWriter(
@@ -130,11 +130,9 @@ func newWriter(
 	nowProvider nowProvider,
 	fileNameGenerator filename.FileNameGenerator,
 	fullName string,
-	interval string,
-	suffix string,
+	config *state.Config,
 ) (*LogWriter, error) {
-	c := state.NewConfig(interval, suffix)
-	s, err := state.NewState(storage, fullName, *c)
+	s, err := state.NewState(storage, fullName, *config)
 	if err != nil {
 		return nil, err
 	}

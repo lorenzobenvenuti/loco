@@ -78,10 +78,18 @@ func HomeDir() (string, error) {
 	return user.HomeDir, nil
 }
 
+func MustGetAppDir() string {
+	d, err := AppDir()
+	if err != nil {
+		panic(err)
+	}
+	return d
+}
+
 func AppDir() (string, error) {
 	dir, err := HomeDir()
 	if err != nil {
 		return "", err
 	}
-	return path.Join(dir, ".loco"), err
+	return path.Join(dir, ".loco"), nil
 }

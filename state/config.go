@@ -1,11 +1,13 @@
 package state
 
+import "time"
+
 type Config struct {
-	Interval string
+	Interval time.Duration
 	Suffix   string
 }
 
-func NewConfig(interval string, suffix string) *Config {
+func NewConfig(interval time.Duration, suffix string) *Config {
 	return &Config{
 		Interval: interval,
 		Suffix:   suffix,

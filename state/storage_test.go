@@ -35,7 +35,7 @@ func TestStoreSuccessfullyStoresAState(t *testing.T) {
 		RotatedAt: time.Unix(0, 20000),
 		Counter:   42,
 		Config: Config{
-			Interval: "3w",
+			Interval: time.Hour * 24 * 21,
 			Suffix:   "%Y%m%d",
 		},
 	}
@@ -55,7 +55,7 @@ func TestStoreSuccessfullyListStates(t *testing.T) {
 		RotatedAt: time.Unix(0, 20000),
 		Counter:   42,
 		Config: Config{
-			Interval: "2d",
+			Interval: time.Hour * 48,
 			Suffix:   "%c",
 		},
 	}
@@ -65,7 +65,7 @@ func TestStoreSuccessfullyListStates(t *testing.T) {
 		RotatedAt: time.Unix(0, 40000),
 		Counter:   77,
 		Config: Config{
-			Interval: "2d",
+			Interval: time.Hour * 48,
 			Suffix:   "%c",
 		},
 	}
@@ -86,7 +86,7 @@ func TestStoreSuccessfullyRemoveStates(t *testing.T) {
 		RotatedAt: time.Unix(0, 20000),
 		Counter:   42,
 		Config: Config{
-			Interval: "2d",
+			Interval: time.Hour * 48,
 			Suffix:   "%c",
 		},
 	}

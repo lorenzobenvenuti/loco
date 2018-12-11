@@ -5,8 +5,6 @@ import (
 	"io"
 	"text/tabwriter"
 	"time"
-
-	"github.com/lorenzobenvenuti/loco/intervals"
 )
 
 type State struct {
@@ -37,8 +35,7 @@ func (s *State) FileMustBeCreated() bool {
 }
 
 func (s *State) FileMustBeRotated(now time.Time) bool {
-	interval := intervals.MustParse(s.Config.Interval)
-	return s.RotatedAt.IsZero() || (now.Sub(s.RotatedAt) > interval)
+	return s.RotatedAt.IsZero() || (now.Sub(s.RotatedAt) > s.Config.Interval)
 }
 
 func WriteStates(w io.Writer, states []*State) error {

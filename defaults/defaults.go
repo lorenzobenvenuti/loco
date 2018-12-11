@@ -2,60 +2,126 @@ package defaults
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path"
+	"strconv"
+	"text/tabwriter"
+	"time"
 
-	"github.com/lorenzobenvenuti/loco/intervals"
 	"github.com/lorenzobenvenuti/loco/state"
 	"github.com/lorenzobenvenuti/loco/utils"
 )
 
-type DefaultConfigProvider interface {
-	DefaultConfig() *state.Config
+const INTERVAL = "interval"
+const SUFFIX = "suffix"
+
+type ConfigReader interface {
+	GetString(key string) (string, error)
+	GetInt(key string) (int64, error)
 }
 
-type confStringReader interface {
-	confString() (string, error);
+type mapConfigReader struct {
+	config map[string]interface{}
 }
 
-type constConfStringReader struct {
-	value string
+func (r *mapConfigReader) GetString(key string) (string, error) {
+	if v, ok := r.config[key]; ok {
+		s, ok := v.(string)
+		if ok {
+			return s, nil
+		}
+		return "", fmt.Errorf("Cannot convert %v to string", v)
+	}
+	return "", fmt.Errorf("Cannot find key %s", key)
 }
 
-func (r *constConfStringReader) confString() (string, error) {
-	return r.value, nil
+func toInt(v interface{}) (int64, error) {
+	switch v.(type) {
+	case int:
+		return int64(v.(int)), nil
+	case int32:
+		return int64(v.(int32)), nil
+	case int64:
+		return v.(int64), nil
+	case float64:
+		return int64(v.(float64)), nil
+	}
+	return 0, fmt.Errorf("Cannot convert %v to int", v)
 }
 
-type envConfStringReader struct {
-	key string
+func (r *mapConfigReader) GetInt(key string) (int64, error) {
+	if v, ok := r.config[key]; ok {
+		return toInt(v)
+	}
+	return 0, fmt.Errorf("Cannot find key %s", key)
 }
 
-func (r *envConfStringReader) confString() (string, error) {
-	return os.Getenv(r.key), nil
+type envReader interface {
+	getEnv(key string) string
 }
 
-type jsonFileConfStringReader struct {
+type defaultEnvReader struct{}
+
+func (r *defaultEnvReader) getEnv(key string) string {
+	return os.Getenv(key)
+}
+
+type envConfigReader struct {
+	keys      map[string]string
+	envReader envReader
+}
+
+func (r *envConfigReader) GetString(key string) (string, error) {
+	if envKey, ok := r.keys[key]; ok {
+		v := r.envReader.getEnv(envKey)
+		if v == "" {
+			return "", fmt.Errorf("Variable %s is not set", envKey)
+		}
+		return r.envReader.getEnv(envKey), nil
+	}
+	return "", fmt.Errorf("Cannot find key %s", key)
+}
+
+func (r *envConfigReader) GetInt(key string) (int64, error) {
+	if envKey, ok := r.keys[key]; ok {
+		v := r.envReader.getEnv(envKey)
+		i, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("Cannot convert %s to int", v)
+		}
+		return i, nil
+	}
+	return 0, fmt.Errorf("Cannot find key %s", key)
+}
+
+type jsonFileConfigReader struct {
 	path string
-	key string
 }
 
-func (r *jsonFileConfStringReader) confString() (string, error) {
+func (r *jsonFileConfigReader) GetString(key string) (string, error) {
 	m, err := r.loadDefaults()
 	if err != nil {
 		return "", err
 	}
-	return m[r.key].(string), nil
+	return (&mapConfigReader{m}).GetString(key)
 }
 
-func (r *jsonFileConfStringReader) hasDefaults() bool {
+func (r *jsonFileConfigReader) GetInt(key string) (int64, error) {
+	m, err := r.loadDefaults()
+	if err != nil {
+		return 0, err
+	}
+	return (&mapConfigReader{m}).GetInt(key)
+}
+
+func (r *jsonFileConfigReader) hasDefaults() bool {
 	return utils.Exists(r.path)
 }
 
-func (r *jsonFileConfStringReader) loadDefaults() (map[string]interface{}, error) {
+func (r *jsonFileConfigReader) loadDefaults() (map[string]interface{}, error) {
 	bytes, err := ioutil.ReadFile(r.path)
 	if err != nil {
 		return nil, err
@@ -68,7 +134,8 @@ func (r *jsonFileConfStringReader) loadDefaults() (map[string]interface{}, error
 	return m, nil
 }
 
-func (r *jsonFileConfStringReader) writeDefaults(m map[string]interface{}) error {
+func (r *jsonFileConfigReader) writeDefaults(m map[string]interface{}) error {
+	utils.CreateDirIfNotExists(path.Dir(r.path))
 	bytes, err := json.Marshal(m)
 	if err != nil {
 		return err
@@ -76,262 +143,96 @@ func (r *jsonFileConfStringReader) writeDefaults(m map[string]interface{}) error
 	return ioutil.WriteFile(r.path, bytes, 0755)
 }
 
-type compositeConfStringReader struct {
-	readers []confStringReader;
+type compositeConfigReader struct {
+	readers []ConfigReader
 }
 
-func (r *compositeConfStringReader) confString() (string, error) {
+func (r *compositeConfigReader) GetString(key string) (string, error) {
 	for _, reader := range r.readers {
-		s, err := reader.confString()
-		if err == nil && s != "" {
+		s, err := reader.GetString(key)
+		if err == nil {
 			return s, nil
 		}
 	}
-	return "", errors.New("Cannot retrieve configuration string")
+	return "", fmt.Errorf("Cannot read a value for %s", key)
 }
 
-type intervalConfStringReader struct {
-	delegate confStringReader
-}
-
-func (r *intervalConfStringReader) confString() (string, error) {
-	s, err := r.delegate.confString()
-	if err != nil {
-		return "", err
-	}
-	err = intervals.Validate(s)
-	if err != nil {
-		return "", err
-	}
-	return s, nil
-}
-
-func mustGetConfString(confString string, err error) string {
-	if err != nil {
-		panic(err)
-	}
-	return confString
-}
-
-type defaultConfigProvider struct {
-	intervalConfStringReader confStringReader
-	suffixConfStringReader confStringReader
-}
-
-func (p *defaultConfigProvider) DefaultConfig() *state.Config {
-	return &state.Config{
-		Interval: mustGetConfString(p.intervalConfStringReader.confString()),
-		Suffix: mustGetConfString(p.suffixConfStringReader.confString()),
-	}
-}
-
-func NewDefaultConfigProvider() DefaultConfigProvider {
-	intervalConfStringReader := []confStringReader {
-		&intervalConfStringReader{&envConfStringReader{"LOCO_INTERVAL"}},
-		&jsonFileConfStringReader{"/path/to/file", "interval"},
-		&constConfStringReader{"1d"},
-	}
-	suffixConfStringReader := []confStringReader {
-		&envConfStringReader{"LOCO_SUFFIX"},
-		&jsonFileConfStringReader{"/path/to/file", "suffix"},
-		&constConfStringReader{"%c"},
-	}
-	return &defaultConfigProvider{
-		intervalConfStringReader: &compositeConfStringReader{intervalConfStringReader},
-		suffixConfStringReader: &compositeConfStringReader{suffixConfStringReader},
-	}
-}
-
-type DefaultsProvider interface {
-	Interval() (string, error)
-	Suffix() (string, error)
-}
-
-type constDefaultsProvider struct {
-	interval string
-	suffix   string
-}
-
-func (p *constDefaultsProvider) Interval() (string, error) {
-	return p.interval, nil
-}
-
-func (p *constDefaultsProvider) Suffix() (string, error) {
-	return p.suffix, nil
-}
-
-type fileDefaultsProvider struct {
-	path string
-}
-
-func (p *fileDefaultsProvider) Interval() (string, error) {
-	d, err := p.loadDefaults()
-	if err != nil {
-		return "", err
-	}
-	return d.Interval, nil
-}
-
-func (p *fileDefaultsProvider) Suffix() (string, error) {
-	d, err := p.loadDefaults()
-	if err != nil {
-		return "", err
-	}
-	return d.Suffix, nil
-}
-
-func (p *fileDefaultsProvider) hasDefaults() bool {
-	return utils.Exists(p.path)
-}
-
-func (p *fileDefaultsProvider) loadDefaults() (*state.Config, error) {
-	bytes, err := ioutil.ReadFile(p.path)
-	if err != nil {
-		return nil, err
-	}
-	d := &state.Config{}
-	err = json.Unmarshal(bytes, d)
-	if err != nil {
-		return nil, err
-	}
-	return d, nil
-}
-
-func (p *fileDefaultsProvider) writeDefaults(d *state.Config) error {
-	bytes, err := json.Marshal(d)
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(p.path, bytes, 0755)
-}
-
-type envVariableReader interface {
-	GetEnv(key string) string
-}
-
-type defaultEnvVariableReader struct{}
-
-func (r *defaultEnvVariableReader) GetEnv(key string) string {
-	return os.Getenv(key)
-}
-
-type envDefaultsProvider struct {
-	envVariableReader envVariableReader
-}
-
-func (p *envDefaultsProvider) Interval() (string, error) {
-	interval := p.envVariableReader.GetEnv("LOCO_INTERVAL")
-	err := intervals.Validate(interval)
-	if err != nil {
-		return "", err
-	}
-	return interval, nil
-}
-
-func (p *envDefaultsProvider) Suffix() (string, error) {
-	return p.envVariableReader.GetEnv("LOCO_SUFFIX"), nil
-}
-
-type compositeDefaultsProvider struct {
-	providers []DefaultsProvider
-}
-
-func (p *compositeDefaultsProvider) Interval() (string, error) {
-	for _, p := range p.providers {
-		interval, err := p.Interval()
-		if err == nil && interval != "" {
-			return interval, nil
+func (r *compositeConfigReader) GetInt(key string) (int64, error) {
+	for _, reader := range r.readers {
+		i, err := reader.GetInt(key)
+		if err == nil {
+			return i, nil
 		}
 	}
-	return "", errors.New("Cannot find a default interval")
+	return 0, fmt.Errorf("Cannot read a value for %s", key)
 }
 
-func (p *compositeDefaultsProvider) Suffix() (string, error) {
-	for _, p := range p.providers {
-		suffix, err := p.Suffix()
-		if err == nil && suffix != "" {
-			return suffix, nil
-		}
-	}
-	return "", errors.New("Cannot find a default suffix")
-}
+var homeDirConfigReader = &jsonFileConfigReader{path.Join(utils.MustGetAppDir(), "defaults.json")}
 
-func MustGetInterval(defaultsProvider DefaultsProvider) string {
-	interval, err := defaultsProvider.Interval()
-	if err != nil {
-		panic(err)
-	}
-	return interval
-}
-
-func MustGetSuffix(defaultsProvider DefaultsProvider) string {
-	suffix, err := defaultsProvider.Suffix()
-	if err != nil {
-		panic(err)
-	}
-	return suffix
-}
-
-func appDirFileDefaultsProvider() (*fileDefaultsProvider, error) {
-	appDir, err := utils.AppDir()
-	if err != nil {
-		return nil, err
-	}
-	return &fileDefaultsProvider{path.Join(appDir, "defaults.json")}, nil
-}
-
-func mustGetAppDirFileDefaultsProvider() *fileDefaultsProvider {
-	p, err := appDirFileDefaultsProvider()
-	if err != nil {
-		panic(err)
-	}
-	return p
-}
-
-func environmentDefaultsProvider() DefaultsProvider {
-	return &envDefaultsProvider{&defaultEnvVariableReader{}}
-}
-
-func builtInDefaultsProvider() DefaultsProvider {
-	return &constDefaultsProvider{interval: "1d", suffix: "%c"}
-}
-
-func NewStaticDefaultsProvider() DefaultsProvider {
-	return &compositeDefaultsProvider{[]DefaultsProvider{
-		mustGetAppDirFileDefaultsProvider(),
-		builtInDefaultsProvider(),
+func newConfigReader() ConfigReader {
+	return &compositeConfigReader{[]ConfigReader{
+		&envConfigReader{
+			keys:      map[string]string{INTERVAL: "LOCO_INTERVAL", SUFFIX: "LOCO_SUFFIX"},
+			envReader: &defaultEnvReader{},
+		},
+		homeDirConfigReader,
+		&mapConfigReader{map[string]interface{}{INTERVAL: int64(time.Hour * 24), SUFFIX: "%c"}},
 	}}
 }
 
-func NewRuntimeDefaultsProvider() DefaultsProvider {
-	return &compositeDefaultsProvider{[]DefaultsProvider{
-		environmentDefaultsProvider(),
-		NewStaticDefaultsProvider(),
-	}}
-}
-
-func SetDefaultInterval(interval string) error {
-	err := intervals.Validate(interval)
+func mustGetString(cr ConfigReader, key string) string {
+	s, err := cr.GetString(key)
 	if err != nil {
-		return err
+		panic(err)
 	}
-	p := NewStaticDefaultsProvider()
-	d := &state.Config{}
-	d.Interval = interval
-	d.Suffix = MustGetSuffix(p)
-	return mustGetAppDirFileDefaultsProvider().writeDefaults(d)
+	return s
 }
 
-func SetDefaultSuffix(suffix string) error {
-	p := NewStaticDefaultsProvider()
-	d := &state.Config{}
-	d.Interval = MustGetInterval(p)
-	d.Suffix = suffix
-	return mustGetAppDirFileDefaultsProvider().writeDefaults(d)
+func mustGetInt(cr ConfigReader, key string) int64 {
+	i, err := cr.GetInt(key)
+	if err != nil {
+		panic(err)
+	}
+	return i
 }
 
-func WriteDefaults(writer io.Writer, provider DefaultsProvider) {
-	interval := MustGetInterval(provider)
-	suffix := MustGetSuffix(provider)
-	io.WriteString(writer, fmt.Sprintf("Interval\t%s\nSuffix\t%s\n", interval, suffix))
+var configReader = newConfigReader()
+
+func DefaultConfig() *state.Config {
+	return state.NewConfig(
+		time.Duration(mustGetInt(configReader, INTERVAL)),
+		mustGetString(configReader, SUFFIX),
+	)
+
+}
+func SetDefaultConfig(c *state.Config) error {
+	return homeDirConfigReader.writeDefaults(
+		map[string]interface{}{INTERVAL: c.Interval, SUFFIX: c.Suffix},
+	)
+}
+
+func mergeWithDefaultConfig(c *state.Config, d *state.Config) *state.Config {
+	interval := d.Interval
+	suffix := d.Suffix
+	if c.Interval != time.Duration(0) {
+		interval = c.Interval
+	}
+	if c.Suffix != "" {
+		suffix = c.Suffix
+	}
+	return state.NewConfig(interval, suffix)
+}
+
+func MergeWithDefaultConfig(c *state.Config) *state.Config {
+	return mergeWithDefaultConfig(c, DefaultConfig())
+}
+
+func writeDefaultConfig(w io.Writer, c *state.Config) {
+	tw := tabwriter.NewWriter(w, 0, 0, 1, ' ', tabwriter.TabIndent)
+	fmt.Fprintf(tw, "Interval:\t%s\nSuffix:\t%s\n", c.Interval, c.Suffix)
+	tw.Flush()
+}
+
+func WriteDefaultConfig(w io.Writer) {
+	writeDefaultConfig(w, DefaultConfig())
 }
